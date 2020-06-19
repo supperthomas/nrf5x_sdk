@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2013 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2013 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -49,6 +49,7 @@
 #ifndef APP_ERROR_H__
 #define APP_ERROR_H__
 
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -60,23 +61,25 @@
 #include "ant_error.h"
 #endif // ANT_STACK_SUPPORT_REQD
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define NRF_FAULT_ID_SDK_RANGE_START 0x00004000 /**< The start of the range of error IDs defined in the SDK. */
+#define NRF_FAULT_ID_SDK_RANGE_START (0x00004000) /**< The start of the range of error IDs defined in the SDK. */
 
 /**@defgroup APP_ERROR_FAULT_IDS Fault ID types
  * @{ */
-#define NRF_FAULT_ID_SDK_ERROR       NRF_FAULT_ID_SDK_RANGE_START + 1 /**< An error stemming from a call to @ref APP_ERROR_CHECK or @ref APP_ERROR_CHECK_BOOL. The info parameter is a pointer to an @ref error_info_t variable. */
-#define NRF_FAULT_ID_SDK_ASSERT      NRF_FAULT_ID_SDK_RANGE_START + 2 /**< An error stemming from a call to ASSERT (nrf_assert.h). The info parameter is a pointer to an @ref assert_info_t variable. */
+#define NRF_FAULT_ID_SDK_ERROR       (NRF_FAULT_ID_SDK_RANGE_START + 1) /**< An error stemming from a call to @ref APP_ERROR_CHECK or @ref APP_ERROR_CHECK_BOOL. The info parameter is a pointer to an @ref error_info_t variable. */
+#define NRF_FAULT_ID_SDK_ASSERT      (NRF_FAULT_ID_SDK_RANGE_START + 2) /**< An error stemming from a call to ASSERT (nrf_assert.h). The info parameter is a pointer to an @ref assert_info_t variable. */
 /**@} */
 
 /**@brief Structure containing info about an error of the type @ref NRF_FAULT_ID_SDK_ERROR.
  */
 typedef struct
 {
-    uint16_t        line_num;    /**< The line number where the error occurred. */
+    uint32_t        line_num;    /**< The line number where the error occurred. */
     uint8_t const * p_file_name; /**< The file in which the error occurred. */
     uint32_t        err_code;    /**< The error code representing the error that occurred. */
 } error_info_t;
@@ -88,6 +91,16 @@ typedef struct
     uint16_t        line_num;    /**< The line number where the error occurred. */
     uint8_t const * p_file_name; /**< The file in which the error occurred. */
 } assert_info_t;
+
+/**@brief Defines required by app_error_handler assembler intructions.
+ */
+#define APP_ERROR_ERROR_INFO_OFFSET_LINE_NUM        (offsetof(error_info_t, line_num))
+#define APP_ERROR_ERROR_INFO_OFFSET_P_FILE_NAME     (offsetof(error_info_t, p_file_name))
+#define APP_ERROR_ERROR_INFO_OFFSET_ERR_CODE        (offsetof(error_info_t, err_code))
+#define APP_ERROR_ERROR_INFO_SIZE                   (sizeof(error_info_t))
+#define APP_ERROR_ERROR_INFO_SIZE_ALIGNED_8BYTE \
+    ALIGN_NUM(APP_ERROR_ERROR_INFO_SIZE, sizeof(uint64_t))
+
 
 /**@brief Function for error handling, which is called when an error has occurred.
  *
@@ -113,10 +126,7 @@ void app_error_handler_bare(ret_code_t error_code);
  */
 void app_error_save_and_stop(uint32_t id, uint32_t pc, uint32_t info);
 
-/**@brief       Function for printing all error info (using nrf_log).
- *
- * @details     Nrf_log library must be initialized using NRF_LOG_INIT macro before calling
- *              this function.
+/**@brief       Function for logging details of error and flushing logs.
  *
  * @param[in] id    Fault identifier. See @ref NRF_FAULT_IDS.
  * @param[in] pc    The program counter of the instruction that triggered the fault, or 0 if
@@ -124,64 +134,7 @@ void app_error_save_and_stop(uint32_t id, uint32_t pc, uint32_t info);
  * @param[in] info  Optional additional information regarding the fault. Refer to each fault
  *                  identifier for details.
  */
-static __INLINE void app_error_log(uint32_t id, uint32_t pc, uint32_t info)
-{
-    switch (id)
-    {
-        case NRF_FAULT_ID_SDK_ASSERT:
-            //NRF_LOG_INFO(NRF_LOG_COLOR_RED "\r\n*** ASSERTION FAILED ***\r\n");
-            if (((assert_info_t *)(info))->p_file_name)
-            {
-               // NRF_LOG_INFO(NRF_LOG_COLOR_WHITE "Line Number: %u\r\n", (unsigned int) ((assert_info_t *)(info))->line_num);
-                //NRF_LOG_INFO("File Name:   %s\r\n", ((assert_info_t *)(info))->p_file_name);
-            }
-            //NRF_LOG_INFO(NRF_LOG_COLOR_DEFAULT "\r\n");
-            break;
-
-        case NRF_FAULT_ID_SDK_ERROR:
-            //NRF_LOG_INFO(NRF_LOG_COLOR_RED "\r\n*** APPLICATION ERROR *** \r\n" NRF_LOG_COLOR_WHITE);
-            if (((error_info_t *)(info))->p_file_name)
-            {
-                //NRF_LOG_INFO("Line Number: %u\r\n", (unsigned int) ((error_info_t *)(info))->line_num);
-                //NRF_LOG_INFO("File Name:   %s\r\n", ((error_info_t *)(info))->p_file_name);
-            }
-            //NRF_LOG_INFO("Error Code:  0x%X\r\n" NRF_LOG_COLOR_DEFAULT "\r\n", (unsigned int) ((error_info_t *)(info))->err_code);
-            break;
-    }
-}
-
-/**@brief       Function for printing all error info (using printf).
- *
- * @param[in] id    Fault identifier. See @ref NRF_FAULT_IDS.
- * @param[in] pc    The program counter of the instruction that triggered the fault, or 0 if
- *                  unavailable.
- * @param[in] info  Optional additional information regarding the fault. Refer to each fault
- *                  identifier for details.
- */
-//lint -save -e438
-static __INLINE void app_error_print(uint32_t id, uint32_t pc, uint32_t info)
-{
-    unsigned int tmp = id;
-    printf("app_error_print():\r\n");
-    printf("Fault identifier:  0x%X\r\n", tmp);
-    printf("Program counter:   0x%X\r\n", tmp = pc);
-    printf("Fault information: 0x%X\r\n", tmp = info);
-
-    switch (id)
-    {
-        case NRF_FAULT_ID_SDK_ASSERT:
-            printf("Line Number: %u\r\n", tmp = ((assert_info_t *)(info))->line_num);
-            printf("File Name:   %s\r\n",       ((assert_info_t *)(info))->p_file_name);
-            break;
-
-        case NRF_FAULT_ID_SDK_ERROR:
-            printf("Line Number: %u\r\n",   tmp = ((error_info_t *)(info))->line_num);
-            printf("File Name:   %s\r\n",         ((error_info_t *)(info))->p_file_name);
-            printf("Error Code:  0x%X\r\n", tmp = ((error_info_t *)(info))->err_code);
-            break;
-    }
-}
-//lint -restore
+void app_error_log_handle(uint32_t id, uint32_t pc, uint32_t info);
 
 
 /**@brief Macro for calling error handler function.

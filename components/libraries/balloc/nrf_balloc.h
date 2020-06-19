@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
   * @defgroup nrf_balloc Block memory allocator
@@ -55,6 +55,19 @@ extern "C" {
 #include "sdk_errors.h"
 #include "sdk_config.h"
 #include "app_util_platform.h"
+#include "app_util.h"
+#include "nrf_log_instance.h"
+#include "nrf_section.h"
+
+/** @brief Name of the module used for logger messaging.
+ */
+#define NRF_BALLOC_LOG_NAME balloc
+
+#if NRF_BALLOC_CONFIG_DEBUG_ENABLED || NRF_BALLOC_CLI_CMDS
+#define NRF_BALLOC_HAS_NAME 1
+#else
+#define NRF_BALLOC_HAS_NAME 0
+#endif
 
 /**@defgroup NRF_BALLOC_DEBUG Macros for preparing debug flags for block allocator module.
  * @{ */
@@ -78,7 +91,7 @@ extern "C" {
     #define NRF_BALLOC_DEFAULT_DEBUG_FLAGS                                                      \
     (                                                                                           \
         NRF_BALLOC_DEBUG_HEAD_GUARD_WORDS_SET(NRF_BALLOC_CONFIG_HEAD_GUARD_WORDS)           |   \
-        NRF_BALLOC_DEBUG_TAIL_GUARD_WORDS_SET(NRF_BALLOC_CONFIG_TAIL_WORDS)                 |   \
+        NRF_BALLOC_DEBUG_TAIL_GUARD_WORDS_SET(NRF_BALLOC_CONFIG_TAIL_GUARD_WORDS)           |   \
         NRF_BALLOC_DEBUG_BASIC_CHECKS_SET(NRF_BALLOC_CONFIG_BASIC_CHECKS_ENABLED)           |   \
         NRF_BALLOC_DEBUG_DOUBLE_FREE_CHECK_SET(NRF_BALLOC_CONFIG_DOUBLE_FREE_CHECK_ENABLED) |   \
         NRF_BALLOC_DEBUG_DATA_TRASHING_CHECK_SET(NRF_BALLOC_CONFIG_DATA_TRASHING_CHECK_ENABLED) \
@@ -107,8 +120,11 @@ typedef struct
                                         /**<
                                          * Memory is used as a heap for blocks.
                                          */
+    NRF_LOG_INSTANCE_PTR_DECLARE(p_log) //!< Pointer to instance of the logger object (Conditionally compiled).
+#if NRF_BALLOC_HAS_NAME
+    const char      * p_name;           //!< Pointer to string with pool name.
+#endif
 #if NRF_BALLOC_CONFIG_DEBUG_ENABLED
-    void            * p_memory_end;     //!< Pointer to the end of the memory pool.
     uint32_t          debug_flags;      //!< Debugging settings.
                                         /**<
                                          * Debug flag should be created by @ref NRF_BALLOC_DEBUG.
@@ -139,6 +155,35 @@ typedef struct
                 ALIGN_NUM(sizeof(uint32_t), (_element_size))
 #endif // NRF_BALLOC_CONFIG_DEBUG_ENABLED
 
+
+/**@brief Get element size ( excluding debugging overhead is present)
+ *        flags).
+ *
+ * @param[in]   _p_balloc   Pointer to balloc instance.
+ */
+#if NRF_BALLOC_CONFIG_DEBUG_ENABLED
+#define NRF_BALLOC_ELEMENT_SIZE(_p_balloc) \
+           (ALIGN_NUM(sizeof(uint32_t), (_p_balloc)->block_size) -                                 \
+           ((sizeof(uint32_t) * NRF_BALLOC_DEBUG_HEAD_GUARD_WORDS_GET((_p_balloc)->debug_flags)) + \
+           (sizeof(uint32_t) * NRF_BALLOC_DEBUG_TAIL_GUARD_WORDS_GET((_p_balloc)->debug_flags))))
+#else
+#define NRF_BALLOC_ELEMENT_SIZE(_p_balloc) \
+           (_p_balloc)->block_size
+#endif // NRF_BALLOC_CONFIG_DEBUG_ENABLED
+
+#if NRF_BALLOC_CONFIG_DEBUG_ENABLED
+#define __NRF_BALLOC_ASSIGN_DEBUG_FLAGS(_debug_flags)   .debug_flags = (_debug_flags),
+#else
+#define __NRF_BALLOC_ASSIGN_DEBUG_FLAGS(_debug_flags)
+#endif
+
+#if NRF_BALLOC_HAS_NAME
+#define __NRF_BALLOC_ASSIGN_POOL_NAME(_name)            .p_name = STRINGIFY(_name),
+#else
+#define __NRF_BALLOC_ASSIGN_POOL_NAME(_name)
+#endif
+
+
 /**@brief Create a block allocator instance with custom debug flags.
  *
  * @note  This macro reserves memory for the given block allocator instance.
@@ -148,40 +193,30 @@ typedef struct
  * @param[in]   _pool_size      Size of the pool.
  * @param[in]   _debug_flags    Debug flags (@ref NRF_BALLOC_DEBUG).
  */
-#if NRF_BALLOC_CONFIG_DEBUG_ENABLED
-    #define NRF_BALLOC_DBG_DEF(_name, _element_size, _pool_size, _debug_flags)                      \
-        STATIC_ASSERT((_pool_size) <= UINT8_MAX);                                                   \
-        static uint8_t              _name##_nrf_balloc_pool_stack[(_pool_size)];                    \
-        static uint32_t             _name##_nrf_balloc_pool_mem                                     \
-            [NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags) * (_pool_size) / sizeof(uint32_t)]; \
-        static nrf_balloc_cb_t      _name##_nrf_balloc_cb;                                          \
-        static const nrf_balloc_t   _name =                                                         \
-            {                                                                                       \
-                .p_cb           = &_name##_nrf_balloc_cb,                                           \
-                .p_stack_base   = _name##_nrf_balloc_pool_stack,                                    \
-                .p_stack_limit  = _name##_nrf_balloc_pool_stack + (_pool_size),                     \
-                .p_memory_begin = _name##_nrf_balloc_pool_mem,                                      \
-                .block_size     = NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags),               \
-                .p_memory_end   = (uint8_t *)_name##_nrf_balloc_pool_mem                            \
-                                + NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags) * (_pool_size),\
-                .debug_flags    = (_debug_flags),                                                   \
-            }
-#else
-    #define NRF_BALLOC_DBG_DEF(_name, _element_size, _pool_size, _debug_flags)                      \
-        STATIC_ASSERT((_pool_size) <= UINT8_MAX);                                                   \
-        static uint8_t              _name##_nrf_balloc_pool_stack[(_pool_size)];                    \
-        static uint32_t             _name##_nrf_balloc_pool_mem                                     \
-            [NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags) * (_pool_size) / sizeof(uint32_t)]; \
-        static nrf_balloc_cb_t      _name##_nrf_balloc_cb;                                          \
-        static const nrf_balloc_t   _name =                                                         \
-            {                                                                                       \
-                .p_cb           = &_name##_nrf_balloc_cb,                                           \
-                .p_stack_base   = _name##_nrf_balloc_pool_stack,                                    \
-                .p_stack_limit  = _name##_nrf_balloc_pool_stack + (_pool_size),                     \
-                .p_memory_begin = _name##_nrf_balloc_pool_mem,                                      \
-                .block_size     = NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags),               \
-            }
-#endif // NRF_BALLOC_CONFIG_DEBUG_ENABLED
+#define NRF_BALLOC_DBG_DEF(_name, _element_size, _pool_size, _debug_flags)                      \
+    STATIC_ASSERT((_pool_size) <= UINT8_MAX);                                                   \
+    static uint8_t              CONCAT_2(_name, _nrf_balloc_pool_stack)[(_pool_size)];          \
+    static uint32_t             CONCAT_2(_name,_nrf_balloc_pool_mem)                            \
+        [NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags) * (_pool_size) / sizeof(uint32_t)]; \
+    static nrf_balloc_cb_t      CONCAT_2(_name,_nrf_balloc_cb);                                 \
+    NRF_LOG_INSTANCE_REGISTER(NRF_BALLOC_LOG_NAME, _name,                                       \
+                              NRF_BALLOC_CONFIG_INFO_COLOR,                                     \
+                              NRF_BALLOC_CONFIG_DEBUG_COLOR,                                    \
+                              NRF_BALLOC_CONFIG_INITIAL_LOG_LEVEL,                              \
+                              NRF_BALLOC_CONFIG_LOG_ENABLED ?                                   \
+                                      NRF_BALLOC_CONFIG_LOG_LEVEL : NRF_LOG_SEVERITY_NONE);     \
+    NRF_SECTION_ITEM_REGISTER(nrf_balloc, const nrf_balloc_t  _name) =                          \
+        {                                                                                       \
+            .p_cb           = &CONCAT_2(_name,_nrf_balloc_cb),                                  \
+            .p_stack_base   = CONCAT_2(_name,_nrf_balloc_pool_stack),                           \
+            .p_stack_limit  = CONCAT_2(_name,_nrf_balloc_pool_stack) + (_pool_size),            \
+            .p_memory_begin = CONCAT_2(_name,_nrf_balloc_pool_mem),                             \
+            .block_size     = NRF_BALLOC_BLOCK_SIZE(_element_size, _debug_flags),               \
+                                                                                                \
+            NRF_LOG_INSTANCE_PTR_INIT(p_log, NRF_BALLOC_LOG_NAME, _name)                        \
+            __NRF_BALLOC_ASSIGN_POOL_NAME(_name)                                                \
+            __NRF_BALLOC_ASSIGN_DEBUG_FLAGS(_debug_flags)                                       \
+        }
 
 /**@brief Create a block allocator instance.
  *
@@ -191,7 +226,7 @@ typedef struct
  * @param[in]   _element_size   Size of one element.
  * @param[in]   _pool_size      Size of the pool.
  */
-#define NRF_BALLOC_DEF(_name, _element_size, _pool_size)           \
+#define NRF_BALLOC_DEF(_name, _element_size, _pool_size)                                           \
             NRF_BALLOC_DBG_DEF(_name, _element_size, _pool_size, NRF_BALLOC_DEFAULT_DEBUG_FLAGS)
 
 /**@brief Create a block allocator interface.
@@ -200,8 +235,8 @@ typedef struct
  * @param[in]   _name    Name of the allocator.
  */
 #define NRF_BALLOC_INTERFACE_DEC(_type, _name)    \
-    _type * _name##_alloc(void);                  \
-    void    _name##_free(_type * p_element)
+    _type * CONCAT_2(_name,_alloc)(void);                  \
+    void    CONCAT_2(_name,_free)(_type * p_element)
 
 /**@brief Define a custom block allocator interface.
  *
@@ -211,7 +246,7 @@ typedef struct
  * @param[in]   _p_pool  Pool from which data will be allocated.
  */
 #define NRF_BALLOC_INTERFACE_CUSTOM_DEF(_attr, _type, _name, _p_pool)           \
-    _attr _type * _name##_alloc(void)                                           \
+    _attr _type * CONCAT_2(_name,_alloc)(void)                                  \
     {                                                                           \
         GCC_PRAGMA("GCC diagnostic push")                                       \
         GCC_PRAGMA("GCC diagnostic ignored \"-Waddress\"")                      \
@@ -222,7 +257,7 @@ typedef struct
         return (_type *)(nrf_balloc_alloc(_p_pool));                            \
     }                                                                           \
                                                                                 \
-    _attr void _name##_free(_type * p_element)                                  \
+    _attr void CONCAT_2(_name,_free)(_type * p_element)                         \
     {                                                                           \
         GCC_PRAGMA("GCC diagnostic push")                                       \
         GCC_PRAGMA("GCC diagnostic ignored \"-Waddress\"")                      \
@@ -282,11 +317,31 @@ void nrf_balloc_free(nrf_balloc_t const * p_pool, void * p_element);
  *
  * @return Maximum number of elements allocated from the pool.
  */
+__STATIC_INLINE uint8_t nrf_balloc_max_utilization_get(nrf_balloc_t const * p_pool);
+
+#ifndef SUPPRESS_INLINE_IMPLEMENTATION
 __STATIC_INLINE uint8_t nrf_balloc_max_utilization_get(nrf_balloc_t const * p_pool)
 {
     ASSERT(p_pool != NULL);
     return p_pool->p_cb->max_utilization;
 }
+#endif //SUPPRESS_INLINE_IMPLEMENTATION
+
+/**@brief Function for getting current memory pool utilization.
+ *
+ * @param[in]   p_pool Pointer to the memory pool instance.
+ *
+ * @return Maximum number of elements allocated from the pool.
+ */
+__STATIC_INLINE uint8_t nrf_balloc_utilization_get(nrf_balloc_t const * p_pool);
+
+#ifndef SUPPRESS_INLINE_IMPLEMENTATION
+__STATIC_INLINE uint8_t nrf_balloc_utilization_get(nrf_balloc_t const * p_pool)
+{
+    ASSERT(p_pool != NULL);
+    return (p_pool->p_stack_limit - p_pool->p_cb->p_stack_pointer);
+}
+#endif //SUPPRESS_INLINE_IMPLEMENTATION
 
 #ifdef __cplusplus
 }

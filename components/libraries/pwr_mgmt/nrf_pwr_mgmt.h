@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
  * @defgroup nrf_pwr_mgmt Power management
@@ -51,6 +51,10 @@
 #include <stdint.h>
 #include <sdk_errors.h>
 #include "nrf_section_iter.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**@brief Power management shutdown types. */
 typedef enum
@@ -81,16 +85,16 @@ typedef enum
 /**@brief Shutdown event types. */
 typedef enum
 {
-    NRF_PWR_MGMT_EVT_PREPARE_WAKEUP,
+    NRF_PWR_MGMT_EVT_PREPARE_WAKEUP = NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF,
     //!< Application will prepare the wakeup mechanism.
 
-    NRF_PWR_MGMT_EVT_PREPARE_SYSOFF,
+    NRF_PWR_MGMT_EVT_PREPARE_SYSOFF = NRF_PWR_MGMT_SHUTDOWN_STAY_IN_SYSOFF,
     //!< Application will prepare to stay in System OFF state.
 
-    NRF_PWR_MGMT_EVT_PREPARE_DFU,
+    NRF_PWR_MGMT_EVT_PREPARE_DFU    = NRF_PWR_MGMT_SHUTDOWN_GOTO_DFU,
     //!< Application will prepare to enter DFU mode.
 
-    NRF_PWR_MGMT_EVT_PREPARE_RESET,
+    NRF_PWR_MGMT_EVT_PREPARE_RESET  = NRF_PWR_MGMT_SHUTDOWN_RESET,
     //!< Application will prepare to chip reset.
 } nrf_pwr_mgmt_evt_t;
 
@@ -112,10 +116,10 @@ typedef bool (*nrf_pwr_mgmt_shutdown_handler_t)(nrf_pwr_mgmt_evt_t event);
  * @param[in]   _priority   Priority of the given handler.
  */
 #define NRF_PWR_MGMT_HANDLER_REGISTER(_handler, _priority)                               \
-            STATIC_ASSERT(_priority < NRF_PWR_MGMT_CONFIG_HANDLER_PRIORITY_COUNT);       \
-            NRF_SECTION_SET_ITEM_REGISTER(pwr_mgmt_data,                                 \
-                                          _priority,                                     \
-                                          nrf_pwr_mgmt_shutdown_handler_t const _handler)
+    STATIC_ASSERT(_priority < NRF_PWR_MGMT_CONFIG_HANDLER_PRIORITY_COUNT);               \
+    /*lint -esym(528,*_handler_function) -esym(529,*_handler_function) : Symbol not referenced. */         \
+    NRF_SECTION_SET_ITEM_REGISTER(pwr_mgmt_data, _priority,                              \
+                                  static nrf_pwr_mgmt_shutdown_handler_t const CONCAT_2(_handler, _handler_function)) = (_handler)
 
 /**@brief   Function for initializing power management.
  *
@@ -145,6 +149,10 @@ void nrf_pwr_mgmt_feed(void);
  * @details All callbacks will be executed prior to shutdown.
  */
 void nrf_pwr_mgmt_shutdown(nrf_pwr_mgmt_shutdown_t shutdown_type);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // NRF_PWR_MGMT_H__
 /** @} */

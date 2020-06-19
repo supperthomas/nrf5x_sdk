@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,13 +35,14 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(APP_TIMER)
 #include "app_timer.h"
 #include <stdlib.h>
 #include "nrf.h"
+#include "nrf_peripherals.h"
 #include "nrf_soc.h"
 #include "app_error.h"
 #include "nrf_delay.h"
@@ -64,15 +65,19 @@ STATIC_ASSERT(RTC1_IRQ_PRI == SWI_IRQ_PRI);
 
 #define MAX_RTC_TASKS_DELAY     47                                          /**< Maximum delay until an RTC task is executed. */
 
-#if (APP_TIMER_CONFIG_SWI_NUMBER == 0)
-#define SWI_IRQn SWI0_IRQn
-#define SWI_IRQHandler SWI0_IRQHandler
-#elif (APP_TIMER_CONFIG_SWI_NUMBER == 1)
-#define SWI_IRQn SWI1_IRQn
-#define SWI_IRQHandler SWI1_IRQHandler
-#else
-#error "Unsupported SWI number."
+#ifdef EGU_PRESENT
+#define SWI_PART(_id) CONCAT_2(SWI,_id)
+#define EGU_PART(_id) CONCAT_2(_EGU,_id)
+#define SWI_IRQ_n(_id) CONCAT_3(SWI_PART(_id), EGU_PART(_id),_IRQn)
+#define SWI_IRQ_Handler_n(_id) CONCAT_3(SWI_PART(_id), EGU_PART(_id),_IRQHandler)
+#else //EGU_PRESENT
+#define SWI_IRQ_n(_id) CONCAT_3(SWI,_id,_IRQn)
+#define SWI_IRQ_Handler_n(_id) CONCAT_3(SWI,_id,_IRQHandler)
 #endif
+
+#define SWI_IRQn SWI_IRQ_n(APP_TIMER_CONFIG_SWI_NUMBER)
+#define SWI_IRQHandler SWI_IRQ_Handler_n(APP_TIMER_CONFIG_SWI_NUMBER)
+
 
 #define MODULE_INITIALIZED (m_op_queue.size != 0)                           /**< Macro designating whether the module has been initialized properly. */
 
@@ -992,7 +997,7 @@ ret_code_t app_timer_start(app_timer_id_t timer_id, uint32_t timeout_ticks, void
     {
         return NRF_ERROR_INVALID_STATE;
     }
-    if (timeout_ticks < APP_TIMER_MIN_TIMEOUT_TICKS)
+    if ((timeout_ticks < APP_TIMER_MIN_TIMEOUT_TICKS) || (timeout_ticks > MAX_RTC_COUNTER_VAL))
     {
         return NRF_ERROR_INVALID_PARAM;
     }

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
  * @addtogroup ser_app Application side code
@@ -83,8 +83,8 @@ typedef uint32_t (*ser_sd_transport_rsp_handler_t)(const uint8_t * p_buffer, uin
  *       usually 'Wait for response' will only be used for handling incoming events or forcing the
  *       application to low power mode.
  *
- * @param[in] ble_evt_handler         	Handler to be called when ble event packet is received.
- * @param[in] ant_evt_handler         	Handler to be called when ant event packet is received.
+ * @param[in] ble_evt_handler           Handler to be called when ble event packet is received.
+ * @param[in] ant_evt_handler           Handler to be called when ant event packet is received.
  * @param[in] os_rsp_wait_handler       Handler to be called after the request is send. It should
  *                                      implement a 'Wait for signal' functionality in an OS environment.
  * @param[in] os_rsp_set_handler        Handler to be called after response reception. It should

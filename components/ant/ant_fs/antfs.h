@@ -1,56 +1,59 @@
 /**
  * This software is subject to the ANT+ Shared Source License
  * www.thisisant.com/swlicenses
- * Copyright (c) Dynastream Innovations, Inc. 2012
+ * Copyright (c) Garmin Canada Inc. 2012
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or
  * without modification, are permitted provided that the following
  * conditions are met:
- * 1) Redistributions of source code must retain the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer.
- * 
- * 2) Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials
- *    provided with the distribution.
- * 
- * 3) Neither the name of Dynastream nor the names of its
- *    contributors may be used to endorse or promote products
- *    derived from this software without specific prior
- *    written permission.
- * 
+ *
+ *    1) Redistributions of source code must retain the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer.
+ *
+ *    2) Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials
+ *       provided with the distribution.
+ *
+ *    3) Neither the name of Garmin nor the names of its
+ *       contributors may be used to endorse or promote products
+ *       derived from this software without specific prior
+ *       written permission.
+ *
  * The following actions are prohibited:
- * 1) Redistribution of source code containing the ANT+ Network
- *    Key. The ANT+ Network Key is available to ANT+ Adopters.
- *    Please refer to http://thisisant.com to become an ANT+
- *    Adopter and access the key.
- * 
- * 2) Reverse engineering, decompilation, and/or disassembly of
- *    software provided in binary form under this license.
- * 
+ *
+ *    1) Redistribution of source code containing the ANT+ Network
+ *       Key. The ANT+ Network Key is available to ANT+ Adopters.
+ *       Please refer to http://thisisant.com to become an ANT+
+ *       Adopter and access the key. 
+ *
+ *    2) Reverse engineering, decompilation, and/or disassembly of
+ *       software provided in binary form under this license.
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
  * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
  * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE HEREBY
  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
  * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; DAMAGE TO ANY DEVICE, LOSS OF USE, DATA, OR
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING, 
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+ * SERVICES; DAMAGE TO ANY DEVICE, LOSS OF USE, DATA, OR 
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
  * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE. SOME STATES DO NOT ALLOW
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN 
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+ * OF THE POSSIBILITY OF SUCH DAMAGE. SOME STATES DO NOT ALLOW 
  * THE EXCLUSION OF INCIDENTAL OR CONSEQUENTIAL DAMAGES, SO THE
  * ABOVE LIMITATIONS MAY NOT APPLY TO YOU.
- * 
+ *
  */
 /**@file
  * @brief The ANT-FS client protocol interface.
- * This file is based on implementation originally made by Dynastream Innovations Inc. - August 2012
+ * This file is based on implementation originally made in August 2012 by Garmin Canada Inc.
+ * (former Dynastream Innovations Inc.)
  * @defgroup ant_fs ANT-FS client device simulator
  * @{
  * @ingroup ant_sdk_utils
@@ -150,11 +153,11 @@ typedef union
 
     struct
     {
-        uint32_t    link_period         : 3;                    /**< Beacon period (0.5 - 8 Hz). */
+        uint8_t     link_period         : 3;                    /**< Beacon period (0.5 - 8 Hz). */
         bool        is_pairing_enabled  : 1;                    /**< Pairing is enabled/disabled. */
         bool        is_upload_enabled   : 1;                    /**< Upload is enabled/disabled. */
         bool        is_data_available   : 1;                    /**< Data is available for download / no data available. */
-        bool        reserved            : 2;                    /**< Reserved. */
+        uint8_t     reserved            : 2;                    /**< Reserved. */
     } parameters;
 } antfs_beacon_status_byte1_t;
 
@@ -288,8 +291,8 @@ typedef void(*antfs_burst_wait_handler_t)(void);
  * @param[in] p_params                 The initial ANT-FS configuration parameters.
  * @param[in] burst_wait_handler       Burst wait handler.
  */
-void antfs_init(const antfs_params_t * const p_params,
-                antfs_burst_wait_handler_t burst_wait_handler);
+void antfs_init(const antfs_params_t * const    p_params,
+                antfs_burst_wait_handler_t      burst_wait_handler);
 
 /**@brief Function for getting host name if received.
  *
@@ -316,8 +319,8 @@ bool antfs_pairing_resp_transmit(bool accept);
  * @param[in] response            The download request response code.
  * @param[in] p_request_info      ANT-FS request info structure.
  */
-void antfs_download_req_resp_prepare(uint8_t response,
-                                             const antfs_request_info_t * const p_request_info);
+void antfs_download_req_resp_prepare(uint8_t                            response,
+                                     const antfs_request_info_t * const p_request_info);
 
 /**@brief Function for downloading requested data.
  *
@@ -344,8 +347,8 @@ uint32_t antfs_input_data_download(uint16_t index,
  *                                  state or application is sending a response for a different file
  *                                  than requested.
  */
-bool antfs_upload_req_resp_transmit(uint8_t response,
-                                            const antfs_request_info_t * const p_request_info);
+bool antfs_upload_req_resp_transmit(uint8_t                            response,
+                                    const antfs_request_info_t * const p_request_info);
 
 /**@brief Function for transmitting upload data response to a upload data command by ANT-FS host.
  *

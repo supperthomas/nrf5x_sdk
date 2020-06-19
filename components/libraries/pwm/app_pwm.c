@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,14 +35,13 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(APP_PWM)
 #include "app_pwm.h"
 #include "nrf_drv_timer.h"
 #include "nrf_drv_ppi.h"
-#include "nrf_drv_common.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_gpiote.h"
 #include "nrf_gpio.h"
@@ -604,7 +603,7 @@ ret_code_t app_pwm_channel_duty_ticks_set(app_pwm_t const * const p_instance,
     ASSERT(channel < APP_PWM_CHANNELS_PER_INSTANCE);
     ASSERT(p_ch_cb->initialized == APP_PWM_CHANNEL_INITIALIZED);
 
-    if (p_cb->state != NRF_DRV_STATE_POWERED_ON)
+    if (p_cb->state != NRFX_DRV_STATE_POWERED_ON)
     {
         return NRF_ERROR_INVALID_STATE;
     }
@@ -686,7 +685,7 @@ static ret_code_t app_pwm_channel_init(app_pwm_t const * const p_instance, uint8
     app_pwm_cb_t * p_cb = p_instance->p_cb;
     app_pwm_channel_cb_t * p_channel_cb = &p_cb->channels_cb[channel];
 
-    if (p_cb->state != NRF_DRV_STATE_UNINITIALIZED)
+    if (p_cb->state != NRFX_DRV_STATE_UNINITIALIZED)
     {
         return NRF_ERROR_INVALID_STATE;
     }
@@ -792,7 +791,7 @@ ret_code_t app_pwm_init(app_pwm_t const * const p_instance, app_pwm_config_t con
 
     app_pwm_cb_t * p_cb = p_instance->p_cb;
 
-    if (p_cb->state != NRF_DRV_STATE_UNINITIALIZED)
+    if (p_cb->state != NRFX_DRV_STATE_UNINITIALIZED)
     {
         return NRF_ERROR_INVALID_STATE;
     }
@@ -907,7 +906,7 @@ ret_code_t app_pwm_init(app_pwm_t const * const p_instance, app_pwm_config_t con
     p_cb->p_ready_callback = p_ready_callback;
     m_instances[p_instance->p_timer->instance_id] = p_instance;
     m_pwm_busy[p_instance->p_timer->instance_id] = BUSY_STATE_IDLE;
-    p_cb->state = NRF_DRV_STATE_INITIALIZED;
+    p_cb->state = NRFX_DRV_STATE_INITIALIZED;
 
     return NRF_SUCCESS;
 }
@@ -917,7 +916,7 @@ void app_pwm_enable(app_pwm_t const * const p_instance)
 {
     app_pwm_cb_t * p_cb = p_instance->p_cb;
 
-    ASSERT(p_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
 
     for (uint32_t channel = 0; channel < APP_PWM_CHANNELS_PER_INSTANCE; ++channel)
     {
@@ -937,7 +936,7 @@ void app_pwm_enable(app_pwm_t const * const p_instance)
     nrf_drv_timer_clear(p_instance->p_timer);
     nrf_drv_timer_enable(p_instance->p_timer);
 
-    p_cb->state = NRF_DRV_STATE_POWERED_ON;
+    p_cb->state = NRFX_DRV_STATE_POWERED_ON;
     return;
 }
 
@@ -946,7 +945,7 @@ void app_pwm_disable(app_pwm_t const * const p_instance)
 {
     app_pwm_cb_t * p_cb = p_instance->p_cb;
 
-    ASSERT(p_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
 
     nrf_drv_timer_disable(p_instance->p_timer);
     pwm_irq_disable(p_instance);
@@ -982,7 +981,7 @@ void app_pwm_disable(app_pwm_t const * const p_instance)
 
     pan73_workaround(p_instance->p_timer->p_reg, false);
 
-    p_cb->state = NRF_DRV_STATE_INITIALIZED;
+    p_cb->state = NRFX_DRV_STATE_INITIALIZED;
     return;
 }
 
@@ -991,17 +990,17 @@ ret_code_t app_pwm_uninit(app_pwm_t const * const p_instance)
 {
     app_pwm_cb_t * p_cb = p_instance->p_cb;
 
-    if (p_cb->state == NRF_DRV_STATE_POWERED_ON)
+    if (p_cb->state == NRFX_DRV_STATE_POWERED_ON)
     {
         app_pwm_disable(p_instance);
     }
-    else if (p_cb->state == NRF_DRV_STATE_UNINITIALIZED)
+    else if (p_cb->state == NRFX_DRV_STATE_UNINITIALIZED)
     {
         return NRF_ERROR_INVALID_STATE;
     }
     pwm_dealloc(p_instance);
 
-    p_cb->state = NRF_DRV_STATE_UNINITIALIZED;
+    p_cb->state = NRFX_DRV_STATE_UNINITIALIZED;
     return NRF_SUCCESS;
 }
 

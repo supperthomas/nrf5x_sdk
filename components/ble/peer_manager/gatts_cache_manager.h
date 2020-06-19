@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef GATTS_CACHE_MANAGER_H__
 #define GATTS_CACHE_MANAGER_H__
@@ -62,44 +62,6 @@ extern "C" {
  */
 
 
-/**@brief Events that can come from the GATT Server Cache Manager module.
- */
-typedef enum
-{
-    GSCM_EVT_LOCAL_DB_CACHE_STORED,  /**< The persistent cache for the local database has been updated with provided values, for one peer. */
-    GSCM_EVT_LOCAL_DB_CACHE_UPDATED, /**< The persistent cache for the local database has been updated with values from the SoftDevice, for one peer. */
-    GSCM_EVT_SC_STATE_STORED,        /**< The service changed pending flag in persistent storage has been updated, for one peer. */
-} gscm_evt_id_t;
-
-
-/**@brief Structure containing an event from the GSCM module.
- */
-typedef struct
-{
-    gscm_evt_id_t evt_id;          /**< The type of event this is. */
-    pm_peer_id_t  peer_id;         /**< The peer ID this event pertains to. */
-    union
-    {
-        struct
-        {
-            uint16_t conn_handle;  /**< The connection this event pertains to. */
-        } local_db_cache_updated;
-        struct
-        {
-            bool state;            /**< The newly stored state of the Service Changed pending flag. */
-        } sc_state_stored;
-    } params;                      /**< Event parameters specific to certain event types. */
-} gscm_evt_t;
-
-/**@brief Event handler for events from the GATT Server Cache Manager module.
- *
- * @param[in]  event   The event that has happened.
- * @param[in]  peer  The id of the peer the event pertains to.
- * @param[in]  flags   The data the event pertains to.
- */
-typedef void (*gscm_evt_handler_t)(gscm_evt_t const * p_event);
-
-
 /**@brief Function for initializing the GATT Server Cache Manager module.
  *
  * @retval NRF_SUCCESS         Initialization was successful.
@@ -122,7 +84,6 @@ ret_code_t gscm_init(void);
  * @retval NRF_ERROR_STORAGE_FULL         No room in persistent_storage. Free up space; the
  *                                        operation will be automatically reattempted after the
  *                                        next FDS garbage collection procedure.
- * @retval NRF_ERROR_INVALID_STATE        Module is not initialized.
  */
 ret_code_t gscm_local_db_cache_update(uint16_t conn_handle);
 
@@ -140,42 +101,9 @@ ret_code_t gscm_local_db_cache_update(uint16_t conn_handle);
  *                                        system part of the sys_attributes was attempted applied,
  *                                        so service changed indications can be sent to subscribers.
  * @retval NRF_ERROR_BUSY                 Unable to perform operation at this time. Reattempt later.
- * @retval NRF_ERROR_INVALID_STATE        Module is not initialized.
- * @return An unexpected return value from an internal function call.
+ * @retval NRF_ERROR_INTERNAL             An unexpected error happened.
  */
 ret_code_t gscm_local_db_cache_apply(uint16_t conn_handle);
-
-
-/**@brief Function for setting new values in the local database cache.
- *
- * @note If the peer is connected, the values will also be applied immediately to the connection.
- * @note The data in the pointer must be available until the GSCM_EVT_LOCAL_DB_STORED event is
- *       received.
- *
- * @param[in]  peer_id     Peer to set values for.
- * @param[in]  p_local_db  Database values to apply. If NULL, the values will instead be cleared.
- *
- * @retval NRF_SUCCESS              Operation started, and values were applied (if connected).
- * @retval NRF_ERROR_NOT_FOUND      The peer ID was invalid or unallocated.
- * @retval NRF_ERROR_INVALID_STATE  Module is not initialized.
- * @return An unexpected return value from an internal function call.
- */
-ret_code_t gscm_local_db_cache_set(pm_peer_id_t peer_id, pm_peer_data_local_gatt_db_t * p_local_db);
-
-
-/**@brief Function for retrieving values in the local database cache.
- *
- * @param[in]    peer_id     Peer to get values for.
- * @param[inout] p_local_db  Where to store the data. The length field needs to reflect the
- *                           available buffer space. On a successful read, the length field is
- *                           updated to match the length of the read data.
- *
- * @retval NRF_SUCCESS              Values retrieved successfully.
- * @retval NRF_ERROR_NOT_FOUND      The peer ID was invalid or unallocated.
- * @retval NRF_ERROR_NULL           p_local_db was NULL.
- * @retval NRF_ERROR_INVALID_STATE  Module is not initialized.
- */
-ret_code_t gscm_local_db_cache_get(pm_peer_id_t peer_id, pm_peer_data_local_gatt_db_t * p_local_db);
 
 
 /**@brief Function for storing the fact that the local database has changed, for all currently
@@ -208,6 +136,7 @@ bool gscm_service_changed_ind_needed(uint16_t conn_handle);
  * @retval NRF_ERROR_NOT_SUPPORTED           Service changed characteristic is not present.
  * @retval NRF_ERROR_INVALID_STATE           Service changed cannot be indicated to this peer
  *                                           because the peer has not subscribed to it.
+ * @retval NRF_ERROR_INTERNAL                An unexpected error happened.
  */
 ret_code_t gscm_service_changed_ind_send(uint16_t conn_handle);
 

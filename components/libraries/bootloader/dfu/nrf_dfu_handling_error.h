@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2017 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2017 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 
  /**@file
@@ -52,29 +52,13 @@
 #define DFU_HANDLING_ERROR_H__
 
 #include "nrf_dfu_types.h"
+#include "nrf_dfu_req_handler.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-/**@brief DFU request result codes.
- *
- * @details The DFU transport layer creates request events of type @ref nrf_dfu_req_op_t. Such events return one of these result codes.
- */
-typedef enum
-{
-    NRF_DFU_RES_CODE_INVALID                 = 0x00,     /**< Invalid opcode. */
-    NRF_DFU_RES_CODE_SUCCESS                 = 0x01,     /**< Operation successful. */
-    NRF_DFU_RES_CODE_OP_CODE_NOT_SUPPORTED   = 0x02,     /**< Opcode not supported. */
-    NRF_DFU_RES_CODE_INVALID_PARAMETER       = 0x03,     /**< Missing or invalid parameter value. */
-    NRF_DFU_RES_CODE_INSUFFICIENT_RESOURCES  = 0x04,     /**< Not enough memory for the data object. */
-    NRF_DFU_RES_CODE_INVALID_OBJECT          = 0x05,     /**< Data object does not match the firmware and hardware requirements, the signature is wrong, or parsing the command failed. */
-    NRF_DFU_RES_CODE_UNSUPPORTED_TYPE        = 0x07,     /**< Not a valid object type for a Create request. */
-    NRF_DFU_RES_CODE_OPERATION_NOT_PERMITTED = 0x08,     /**< The state of the DFU process does not allow this operation. */
-    NRF_DFU_RES_CODE_OPERATION_FAILED        = 0x0A,     /**< Operation failed. */
-    NRF_DFU_RES_CODE_EXT_ERROR               = 0x0B,     /**< Extended error. The next byte of the response contains the error code of the extended error (see @ref nrf_dfu_ext_error_code_t). */
-} nrf_dfu_res_code_t;
 
 /**@brief DFU request extended result codes.
  *
@@ -94,13 +78,14 @@ typedef enum
     NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID      = 0x04, /**< The init command is invalid. The init packet either has
                                                              an invalid update type or it is missing required fields for the update type
                                                              (for example, the init packet for a SoftDevice update is missing the SoftDevice size field). */
-    NRF_DFU_EXT_ERROR_FW_VERSION_FAILURE        = 0x05, /**< The firmware version is too low. For an application, the version must be greater than
-                                                             the current application. For a bootloader, it must be greater than or equal
+    NRF_DFU_EXT_ERROR_FW_VERSION_FAILURE        = 0x05, /**< The firmware version is too low. For an application or SoftDevice, the version must be greater than
+                                                             or equal to the current version. For a bootloader, it must be greater than the current version.
                                                              to the current version. This requirement prevents downgrade attacks.*/
     NRF_DFU_EXT_ERROR_HW_VERSION_FAILURE        = 0x06, /**< The hardware version of the device does not match the required
                                                              hardware version for the update. */
     NRF_DFU_EXT_ERROR_SD_VERSION_FAILURE        = 0x07, /**< The array of supported SoftDevices for the update does not contain
-                                                             the FWID of the current SoftDevice. */
+                                                             the FWID of the current SoftDevice or the first FWID is '0' on a
+                                                             bootloader which requires the SoftDevice to be present. */
     NRF_DFU_EXT_ERROR_SIGNATURE_MISSING         = 0x08, /**< The init packet does not contain a signature. This error code is not used in the
                                                              current implementation, because init packets without a signature
                                                              are regarded as invalid. */
@@ -120,7 +105,7 @@ typedef enum
  *
  * @retval NRF_DFU_RES_CODE_EXT_ERROR
  */
-nrf_dfu_res_code_t ext_error_set(nrf_dfu_ext_error_code_t error_code);
+nrf_dfu_result_t ext_error_set(nrf_dfu_ext_error_code_t error_code);
 
 /**@brief Function for getting the most recent extended error code.
  *

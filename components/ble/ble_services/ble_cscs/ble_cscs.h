@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -60,9 +60,13 @@
  *          @ref ble_cscs_init_t structure.
  *
  *
- * @note The application or the service using this module must propagate BLE stack events to the
- *       Cycling Speead and Candence Service module by calling ble_cscs_on_ble_evt() from the
- *       from the @ref softdevice_handler function. This service will forward the event to the @ref ble_sdk_srv_sc_ctrlpt module.
+ * @note    The application must register this module as BLE event observer using the
+ *          NRF_SDH_BLE_OBSERVER macro. Example:
+ *          @code
+ *              ble_cscs_t instance;
+ *              NRF_SDH_BLE_OBSERVER(anything, BLE_CSCS_BLE_OBSERVER_PRIO,
+ *                                   ble_cscs_on_ble_evt, &instance);
+ *          @endcode
  *
  * @note Attention!
  *  To maintain compliance with Nordic Semiconductor ASA Bluetooth profile
@@ -78,17 +82,31 @@
 #include "ble_srv_common.h"
 #include "ble_sc_ctrlpt.h"
 #include "ble_sensor_location.h"
+#include "nrf_sdh_ble.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/**@brief   Macro for defining a ble_cscs instance.
+ *
+ * @param   _name   Name of the instance.
+ * @hideinitializer
+ */
+#define BLE_CSCS_DEF(_name)                                                                         \
+static ble_cscs_t _name;                                                                            \
+NRF_SDH_BLE_OBSERVER(_name ## _obs,                                                                 \
+                     BLE_CSCS_BLE_OBSERVER_PRIO,                                                    \
+                     ble_cscs_on_ble_evt, &_name)
+
+
 /** @defgroup BLE_CSCS_FEATURES Cycling Speed and Cadence Service feature bits
  * @{ */
-#define BLE_CSCS_FEATURE_WHEEL_REV_BIT                  (0x01 << 0)     /**< Wheel Revolution Data Supported bit. */
-#define BLE_CSCS_FEATURE_CRANK_REV_BIT                  (0x01 << 1)     /**< Crank Revolution Data Supported bit. */
-#define BLE_CSCS_FEATURE_MULTIPLE_SENSORS_BIT           (0x01 << 2)     /**< Multiple Sensor Locations Supported bit. */
+#define BLE_CSCS_FEATURE_WHEEL_REV_BIT          (0x01 << 0)     /**< Wheel Revolution Data Supported bit. */
+#define BLE_CSCS_FEATURE_CRANK_REV_BIT          (0x01 << 1)     /**< Crank Revolution Data Supported bit. */
+#define BLE_CSCS_FEATURE_MULTIPLE_SENSORS_BIT   (0x01 << 2)     /**< Multiple Sensor Locations Supported bit. */
 /** @} */
+
 
 /**@brief Cycling Speed and Cadence Service event type. */
 typedef enum
@@ -114,9 +132,11 @@ typedef void (*ble_cscs_evt_handler_t) (ble_cscs_t * p_cscs, ble_cscs_evt_t * p_
 typedef struct
 {
     ble_cscs_evt_handler_t       evt_handler;                           /**< Event handler to be called for handling events in the Cycling Speed and Cadence Service. */
-    ble_srv_cccd_security_mode_t csc_meas_attr_md;                      /**< Initial security level for cycling speed and cadence measurement attribute */
-    ble_srv_cccd_security_mode_t csc_ctrlpt_attr_md;                    /**< Initial security level for cycling speed and cadence control point attribute */
-    ble_srv_security_mode_t      csc_feature_attr_md;                   /**< Initial security level for feature attribute */
+    security_req_t               csc_meas_cccd_wr_sec;                  /**< Security requirement for writing cycling speed and cadence measurement characteristic CCCD. */
+    security_req_t               csc_feature_rd_sec;                    /**< Security requirement for reading cycling speed and cadence feature characteristic. */
+    security_req_t               csc_location_rd_sec;                   /**< Security requirement for reading cycling speed and cadence location characteristic. */
+    security_req_t               sc_ctrlpt_cccd_wr_sec;                 /**< Security requirement for writing speed and cadence control point characteristic CCCD. */
+    security_req_t               sc_ctrlpt_wr_sec;                      /**< Security requirement for writing speed and cadence control point characteristic. */
     uint16_t                     feature;                               /**< Initial value for features of sensor @ref BLE_CSCS_FEATURES. */
     uint8_t                      ctrplt_supported_functions;            /**< Supported control point functionalities see @ref BLE_SRV_SC_CTRLPT_SUPP_FUNC. */
     ble_sc_ctrlpt_evt_handler_t  ctrlpt_evt_handler;                    /**< Event handler */
@@ -124,7 +144,6 @@ typedef struct
     uint8_t                      size_list_supported_locations;         /**< Number of supported sensor locations in the list.*/
     ble_srv_error_handler_t      error_handler;                         /**< Function to be called in case of an error. */
     ble_sensor_location_t        *sensor_location;                      /**< Initial Sensor Location, if NULL, sensor_location characteristic is not added*/
-    ble_srv_cccd_security_mode_t csc_sensor_loc_attr_md;                /**< Initial security level for sensor location attribute */
 } ble_cscs_init_t;
 
 /**@brief Cycling Speed and Cadence Service structure. This contains various status information for
@@ -153,6 +172,7 @@ typedef struct ble_cscs_meas_s
     uint16_t    last_crank_event_time;                                  /**< Last Crank Event Time. */
 } ble_cscs_meas_t;
 
+
 /**@brief Function for initializing the Cycling Speed and Cadence Service.
  *
  * @param[out]  p_cscs      Cycling Speed and Cadence Service structure. This structure will have to
@@ -162,17 +182,19 @@ typedef struct ble_cscs_meas_s
  *
  * @return      NRF_SUCCESS on successful initialization of service, otherwise an error code.
  */
-uint32_t ble_cscs_init(ble_cscs_t * p_cscs, const ble_cscs_init_t * p_cscs_init);
+uint32_t ble_cscs_init(ble_cscs_t * p_cscs, ble_cscs_init_t const * p_cscs_init);
+
 
 /**@brief Function for handling the Application's BLE Stack events.
  *
  * @details Handles all events from the BLE stack of interest to the Cycling Speed and Cadence
  *          Service.
  *
- * @param[in]   p_cscs     Cycling Speed and Cadence Service structure.
- * @param[in]   p_ble_evt  Event received from the BLE stack.
+ * @param[in]   p_ble_evt   Event received from the BLE stack.
+ * @param[in]   p_context   Cycling Speed and Cadence Service structure.
  */
-void ble_cscs_on_ble_evt(ble_cscs_t * p_cscs, ble_evt_t * p_ble_evt);
+void ble_cscs_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
+
 
 /**@brief Function for sending cycling speed and cadence measurement if notification has been enabled.
  *

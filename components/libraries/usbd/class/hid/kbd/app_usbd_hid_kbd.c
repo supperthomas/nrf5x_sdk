@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,16 +35,14 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
-#include "sdk_config.h"
-#if APP_USBD_HID_KBD_ENABLED
-#include <string.h>
-
 #include "sdk_common.h"
+#if NRF_MODULE_ENABLED(APP_USBD_HID_KBD)
+
+#include <string.h>
 #include "app_usbd_hid_kbd.h"
 #include "app_util_platform.h"
-
 
 /**
  * @defgroup app_usbd_hid_kbd_internals USB HID keyboard internals
@@ -69,6 +67,7 @@ static inline app_usbd_hid_kbd_ctx_t * hid_kbd_ctx_get(app_usbd_hid_kbd_t const 
     return &p_kbd->specific.p_data->ctx;
 }
 
+
 /**
  * @brief Auxiliary function to access HID keyboard instance data.
  *
@@ -82,6 +81,7 @@ static inline app_usbd_hid_kbd_t const * hid_kbd_get(app_usbd_class_inst_t const
     return (app_usbd_hid_kbd_t const *)p_inst;
 }
 
+
 /**
  * @brief Returns keyboard report buffer handle.
  *
@@ -93,15 +93,15 @@ static inline
 app_usbd_hid_report_buffer_t const * hid_kbd_rep_buffer_get(app_usbd_hid_kbd_t const * p_kbd)
 {
     ASSERT(p_kbd != NULL);
-    app_usbd_hid_inst_t const *    p_hinst = &p_kbd->specific.inst.hid_inst;
-    app_usbd_hid_kbd_ctx_t *       p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    app_usbd_hid_inst_t const    * p_hinst    = &p_kbd->specific.inst.hid_inst;
+    app_usbd_hid_kbd_ctx_t       * p_kbd_ctx  = hid_kbd_ctx_get(p_kbd);
     app_usbd_hid_report_buffer_t * p_rep_buff = app_usbd_hid_rep_buff_in_get(p_hinst);
 
     p_rep_buff->p_buff = p_kbd_ctx->report_buff;
-    p_rep_buff->size = sizeof(p_kbd_ctx->report_buff);
+    p_rep_buff->size   = sizeof(p_kbd_ctx->report_buff);
 
     /*Keyboard has only one report input/output report buffer */
-    return p_rep_buff;
+    return app_usbd_hid_rep_buff_in_get(p_hinst);
 }
 
 
@@ -117,7 +117,7 @@ static inline bool hid_kbd_transfer_next(app_usbd_hid_kbd_t const * p_kbd)
 {
     /*Send report only when state has changed*/
     app_usbd_hid_report_buffer_t const * p_rep_buffer = hid_kbd_rep_buffer_get(p_kbd);
-    app_usbd_hid_kbd_ctx_t *             p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    app_usbd_hid_kbd_ctx_t             * p_kbd_ctx    = hid_kbd_ctx_get(p_kbd);
 
     if (memcmp(p_rep_buffer->p_buff, &p_kbd_ctx->rep, p_rep_buffer->size))
     {
@@ -138,8 +138,8 @@ static inline bool hid_kbd_transfer_next(app_usbd_hid_kbd_t const * p_kbd)
  */
 static inline ret_code_t hid_kbd_transfer_set(app_usbd_hid_kbd_t const * p_kbd)
 {
-    app_usbd_class_inst_t const * p_inst = (app_usbd_class_inst_t const *)p_kbd;
-    app_usbd_hid_kbd_ctx_t *      p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    app_usbd_class_inst_t const * p_inst    = (app_usbd_class_inst_t const *)p_kbd;
+    app_usbd_hid_kbd_ctx_t      * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
 
     nrf_drv_usbd_ep_t ep_addr = app_usbd_hid_epin_addr_get(p_inst);
 
@@ -158,7 +158,7 @@ static inline ret_code_t hid_kbd_transfer_set(app_usbd_hid_kbd_t const * p_kbd)
 
     ret_code_t ret;
     CRITICAL_REGION_ENTER();
-    ret = app_usbd_core_ep_transfer(ep_addr, &transfer);
+    ret = app_usbd_ep_transfer(ep_addr, &transfer);
     if (ret == NRF_SUCCESS)
     {
         app_usbd_hid_state_flag_set(&p_kbd_ctx->hid_ctx, APP_USBD_HID_STATE_FLAG_TRANS_IN_PROGRESS);
@@ -168,12 +168,13 @@ static inline ret_code_t hid_kbd_transfer_set(app_usbd_hid_kbd_t const * p_kbd)
     return ret;
 }
 
-ret_code_t app_usbd_hid_kbd_modifier_state_set(app_usbd_hid_kbd_t const *  p_kbd,
+
+ret_code_t app_usbd_hid_kbd_modifier_state_set(app_usbd_hid_kbd_t const  * p_kbd,
                                                app_usbd_hid_kbd_modifier_t modifier,
-                                               bool state)
+                                               bool                        state)
 {
-    app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
-    bool actual_state = (p_kbd_ctx->rep.modifier & modifier) != 0;
+    app_usbd_hid_kbd_ctx_t * p_kbd_ctx    = hid_kbd_ctx_get(p_kbd);
+    bool                     actual_state = (p_kbd_ctx->rep.modifier & modifier) != 0;
 
     if (actual_state == state)
     {
@@ -205,13 +206,15 @@ ret_code_t app_usbd_hid_kbd_modifier_state_set(app_usbd_hid_kbd_t const *  p_kbd
 
 ret_code_t app_usbd_hid_kbd_key_control(app_usbd_hid_kbd_t const * p_kbd,
                                         app_usbd_hid_kbd_codes_t   key,
-                                        bool press)
+                                        bool                       press)
 {
-    app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
-    uint8_t * destination = NULL;
+    app_usbd_hid_kbd_ctx_t * p_kbd_ctx   = hid_kbd_ctx_get(p_kbd);
+    uint8_t                * destination = NULL;
+
     if (press)
     {
-        for (size_t i = 0; i < ARRAY_SIZE(p_kbd_ctx->rep.key_table); ++i) {
+        for (size_t i = 0; i < ARRAY_SIZE(p_kbd_ctx->rep.key_table); ++i)
+        {
             if (p_kbd_ctx->rep.key_table[i] == key)
             {
                 /*Already pressed*/
@@ -232,7 +235,8 @@ ret_code_t app_usbd_hid_kbd_key_control(app_usbd_hid_kbd_t const * p_kbd,
     else
     {
         /*Find if key is pressed*/
-        for (size_t i = 0; i < ARRAY_SIZE(p_kbd_ctx->rep.key_table); ++i) {
+        for (size_t i = 0; i < ARRAY_SIZE(p_kbd_ctx->rep.key_table); ++i)
+        {
             if (p_kbd_ctx->rep.key_table[i] == key)
             {
                 destination = &p_kbd_ctx->rep.key_table[i];
@@ -261,24 +265,56 @@ ret_code_t app_usbd_hid_kbd_key_control(app_usbd_hid_kbd_t const * p_kbd,
     return NRF_SUCCESS;
 }
 
+
 bool app_usbd_hid_kbd_led_state_get(app_usbd_hid_kbd_t const * p_kbd,
                                     app_usbd_hid_kbd_led_t     led)
 {
-        app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
 
-        return (p_kbd_ctx->leds_state & led) != 0;
+    return (p_kbd_ctx->leds_state & led) != 0;
+}
+
+const void * app_usbd_hid_kbd_in_report_get(app_usbd_hid_kbd_t const * p_kbd,
+                                            size_t * p_size)
+{
+    app_usbd_hid_inst_t const * p_kinst = &p_kbd->specific.inst.hid_inst;
+    *p_size = p_kinst->p_rep_buffer_in->size;
+    return p_kinst->p_rep_buffer_in->p_buff;
+}
+
+const void * app_usbd_hid_kbd_out_report_get(app_usbd_hid_kbd_t const * p_kbd,
+                                             size_t * p_size)
+{
+    app_usbd_hid_inst_t const * p_kinst = &p_kbd->specific.inst.hid_inst;
+    *p_size = p_kinst->p_rep_buffer_out->size;
+    return p_kinst->p_rep_buffer_out->p_buff;
 }
 
 /**
  * @brief @ref app_usbd_hid_interface_t::on_get_report
  */
 static ret_code_t hid_kbd_on_get_report(app_usbd_class_inst_t const * p_inst,
-                                        app_usbd_setup_evt_t const *  p_setup_ev)
+                                        app_usbd_setup_evt_t const  * p_setup_ev)
 {
-    app_usbd_hid_kbd_t const * p_kbd = hid_kbd_get(p_inst);
-    app_usbd_hid_report_buffer_t const * p_rep_buffer = hid_kbd_rep_buffer_get(p_kbd);
+    app_usbd_hid_kbd_t const * p_kinst = hid_kbd_get(p_inst);
+    uint8_t const * p_rep_buffer = NULL;
+    size_t buffer_size = 0;
 
-    return app_usbd_core_setup_rsp(&(p_setup_ev->setup), p_rep_buffer->p_buff, p_rep_buffer->size);
+    if (p_setup_ev->setup.wValue.hb == APP_USBD_HID_REPORT_TYPE_INPUT)
+    {
+        p_rep_buffer = app_usbd_hid_kbd_in_report_get(p_kinst, &buffer_size);
+    }
+    else if (p_setup_ev->setup.wValue.hb == APP_USBD_HID_REPORT_TYPE_OUTPUT)
+    {
+        p_rep_buffer = app_usbd_hid_kbd_out_report_get(p_kinst, &buffer_size);
+    }
+    else
+    {
+        return NRF_ERROR_NOT_SUPPORTED;
+    }
+
+    /* Return LEDs state (only the second byte) */
+    return app_usbd_core_setup_rsp(&(p_setup_ev->setup), p_rep_buffer + 1, buffer_size - 1);
 }
 
 
@@ -289,7 +325,7 @@ static ret_code_t hid_kbd_on_set_report_data_cb(nrf_drv_usbd_ep_status_t status,
         return NRF_ERROR_INTERNAL;
     }
 
-    app_usbd_hid_kbd_t const * p_kbd = p_context;
+    app_usbd_hid_kbd_t const           * p_kbd = p_context;
     app_usbd_hid_report_buffer_t const * p_rep_buff;
     p_rep_buff = app_usbd_hid_rep_buff_out_get(&p_kbd->specific.inst.hid_inst);
 
@@ -302,16 +338,18 @@ static ret_code_t hid_kbd_on_set_report_data_cb(nrf_drv_usbd_ep_status_t status,
     return NRF_SUCCESS;
 }
 
+
 /**
  * @brief @ref app_usbd_hid_interface_t::hid_kbd_on_set_report
  */
 static ret_code_t hid_kbd_on_set_report(app_usbd_class_inst_t const * p_inst,
-                                        app_usbd_setup_evt_t const *  p_setup_ev)
+                                        app_usbd_setup_evt_t const  * p_setup_ev)
 {
     app_usbd_hid_kbd_t const * p_kbd = hid_kbd_get(p_inst);
 
     /*Request setup data*/
     app_usbd_hid_report_buffer_t const * p_rep_buff;
+
     p_rep_buff = app_usbd_hid_rep_buff_out_get(&p_kbd->specific.inst.hid_inst);
 
     p_rep_buff->p_buff[0] = 0;
@@ -319,12 +357,12 @@ static ret_code_t hid_kbd_on_set_report(app_usbd_class_inst_t const * p_inst,
 
     ret_code_t ret;
     CRITICAL_REGION_ENTER();
-    ret = app_usbd_core_setup_data_transfer(NRF_DRV_USBD_EPOUT0, &transfer);
+    ret = app_usbd_ep_transfer(NRF_DRV_USBD_EPOUT0, &transfer);
     if (ret == NRF_SUCCESS)
     {
         app_usbd_core_setup_data_handler_desc_t desc = {
-                .handler = hid_kbd_on_set_report_data_cb,
-                .p_context = (app_usbd_hid_kbd_t *)p_kbd
+            .handler   = hid_kbd_on_set_report_data_cb,
+            .p_context = (app_usbd_hid_kbd_t *)p_kbd
         };
 
         ret = app_usbd_core_setup_data_handler_set(NRF_DRV_USBD_EPOUT0, &desc);
@@ -334,6 +372,7 @@ static ret_code_t hid_kbd_on_set_report(app_usbd_class_inst_t const * p_inst,
     return ret;
 }
 
+
 /**
  * @brief @ref app_usbd_hid_interface_t::hid_kbd_ep_transfer_in
  */
@@ -342,51 +381,231 @@ static ret_code_t hid_kbd_ep_transfer_in(app_usbd_class_inst_t const * p_inst)
     return hid_kbd_transfer_set((app_usbd_hid_kbd_t const *)p_inst);
 }
 
+
 /**
  * @brief @ref app_usbd_class_interface_t::event_handler
  */
-static ret_code_t hid_kbd_event_handler(app_usbd_class_inst_t const *  p_inst,
+static ret_code_t hid_kbd_event_handler(app_usbd_class_inst_t const  * p_inst,
                                         app_usbd_complex_evt_t const * p_event)
 {
     ASSERT(p_inst != NULL);
     ASSERT(p_event != NULL);
 
-    app_usbd_hid_kbd_t const *  p_kbd = hid_kbd_get(p_inst);
+    app_usbd_hid_kbd_t const  * p_kbd   = hid_kbd_get(p_inst);
     app_usbd_hid_inst_t const * p_hinst = &p_kbd->specific.inst.hid_inst;
 
     app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
-    app_usbd_hid_ctx_t *     p_hid_ctx = &p_kbd_ctx->hid_ctx;
+    app_usbd_hid_ctx_t     * p_hid_ctx = &p_kbd_ctx->hid_ctx;
 
     /*Try handle event by generic HID event handler*/
     return app_usbd_hid_event_handler(p_inst, p_hinst, p_hid_ctx, p_event);
 }
 
-/**
- * @brief @ref app_usbd_class_interface_t::get_descriptors
- */
-static const void * hid_kbd_get_descriptors(app_usbd_class_inst_t const * p_inst,
-                                            size_t * p_size)
+ret_code_t hid_kbd_clear_buffer(app_usbd_class_inst_t const * p_inst)
 {
-    ASSERT(p_size != NULL);
-    app_usbd_hid_kbd_t const *  p_kbd = hid_kbd_get(p_inst);
+    ASSERT(p_inst != NULL);
+
+    app_usbd_hid_kbd_t const *              p_kbd        = hid_kbd_get(p_inst);
+    app_usbd_hid_kbd_ctx_t *                p_kbd_ctx    = hid_kbd_ctx_get(p_kbd);
+    app_usbd_hid_report_buffer_t const *    p_rep_buffer = hid_kbd_rep_buffer_get(p_kbd);
+
+    memset(p_rep_buffer->p_buff, 0, p_rep_buffer->size);
+    memset(p_kbd_ctx->report_buff, 0, p_rep_buffer->size);
+    memset(&p_kbd_ctx->rep, 0, p_rep_buffer->size);
+    
+    CRITICAL_REGION_ENTER();
+    
+        
+    nrf_drv_usbd_ep_t ep_addr = app_usbd_hid_epin_addr_get(p_inst);
+
+    ASSERT(!NRF_USBD_EPISO_CHECK(ep_addr));
+
+    if (NRF_USBD_EPIN_CHECK(ep_addr))
+    {
+        nrf_drv_usbd_ep_abort(ep_addr);
+    }
+
+    app_usbd_hid_state_flag_clr(&p_kbd_ctx->hid_ctx, APP_USBD_HID_STATE_FLAG_TRANS_IN_PROGRESS);
+    CRITICAL_REGION_EXIT();
+    
+    return NRF_SUCCESS;
+}
+
+
+static uint8_t hid_kbd_get_class_descriptors_count(app_usbd_class_inst_t const * p_inst)
+{
+    app_usbd_hid_kbd_t const  * p_kbd   = hid_kbd_get(p_inst);
     app_usbd_hid_inst_t const * p_hinst = &p_kbd->specific.inst.hid_inst;
 
-    *p_size = p_hinst->raw_desc_size;
-    return p_hinst->p_raw_desc;
+    return p_hinst->subclass_desc_count;
+}
+
+
+static app_usbd_descriptor_t hid_kbd_get_class_descriptors_type(
+    app_usbd_class_inst_t const * p_inst,
+    uint8_t                       desc_num)
+{
+    app_usbd_hid_kbd_t const  * p_kbd   = hid_kbd_get(p_inst);
+    app_usbd_hid_inst_t const * p_hinst = &p_kbd->specific.inst.hid_inst;
+
+    return p_hinst->p_subclass_desc[desc_num]->type;
+}
+
+
+static size_t hid_kbd_get_class_descriptors_length(app_usbd_class_inst_t const * p_inst,
+                                                   uint8_t                       desc_num)
+{
+    app_usbd_hid_kbd_t const  * p_kbd   = hid_kbd_get(p_inst);
+    app_usbd_hid_inst_t const * p_hinst = &p_kbd->specific.inst.hid_inst;
+
+    return p_hinst->p_subclass_desc[desc_num]->size;
+}
+
+
+static const uint8_t * hid_kbd_get_class_descriptors_data(app_usbd_class_inst_t const * p_inst,
+                                                          uint8_t                       desc_num,
+                                                          uint32_t                      cur_byte)
+{
+    app_usbd_hid_kbd_t const  * p_kbd   = hid_kbd_get(p_inst);
+    app_usbd_hid_inst_t const * p_hinst = &p_kbd->specific.inst.hid_inst;
+    const uint8_t * p_byte = &p_hinst->p_subclass_desc[desc_num]->p_data[cur_byte];
+
+    return p_byte;
+}
+
+
+static bool hid_kbd_feed_descriptors(app_usbd_class_descriptor_ctx_t                   * p_ctx,
+                                     app_usbd_class_inst_t const                       * p_inst,
+                                     uint8_t                                           * p_buff,
+                                     size_t                                              max_size)
+{
+    static uint8_t ifaces   = 0;
+    ifaces = app_usbd_class_iface_count_get(p_inst);
+    app_usbd_hid_kbd_t const * p_kbd = hid_kbd_get(p_inst);
+
+    APP_USBD_CLASS_DESCRIPTOR_BEGIN(p_ctx, p_buff, max_size);
+
+    static uint8_t i = 0;
+
+    for (i = 0; i < ifaces; i++)
+    {
+        /* INTERFACE DESCRIPTOR */
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(0x09); // bLength
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_DESCRIPTOR_INTERFACE); // bDescriptorType = Interface
+
+        static app_usbd_class_iface_conf_t const * p_cur_iface = NULL;
+        p_cur_iface = app_usbd_class_iface_get(p_inst, i);
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(app_usbd_class_iface_number_get(p_cur_iface)); // bInterfaceNumber
+
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(0x00); // bAlternateSetting
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(app_usbd_class_iface_ep_count_get(p_cur_iface)); // bNumEndpoints
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_HID_CLASS); // bInterfaceClass = HID
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(p_kbd->specific.inst.hid_inst.subclass_boot); // bInterfaceSubclass (Boot Interface)
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(p_kbd->specific.inst.hid_inst.protocol); // bInterfaceProtocol
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(0x00); // iInterface
+
+        /* HID DESCRIPTOR */
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(0x09); // bLength
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_HID_DESCRIPTOR_HID);  // bDescriptorType = HID
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(LSB_16(APP_USBD_HID_BCD_VER)); // bcdHID LSB
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(MSB_16(APP_USBD_HID_BCD_VER)); // bcdHID MSB
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_HID_COUNTRY_NOT_SUPPORTED); // bCountryCode
+        APP_USBD_CLASS_DESCRIPTOR_WRITE(hid_kbd_get_class_descriptors_count(p_inst)); // bNumDescriptors
+
+        static uint8_t class_desc_cnt = 0;
+        class_desc_cnt = hid_kbd_get_class_descriptors_count(p_inst);
+        static uint8_t  j              = 0;
+        static uint16_t class_desc_len = 0;
+
+        for (j = 0; j < class_desc_cnt; j++)
+        {
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(hid_kbd_get_class_descriptors_type(p_inst, j)); // bDescriptorType
+
+            class_desc_len = hid_kbd_get_class_descriptors_length(p_inst, j);
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(LSB_16(class_desc_len)); // wDescriptorLength LSB
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(MSB_16(class_desc_len)); // wDescriptorLength MSB
+        }
+
+        static uint8_t endpoints = 0;
+        endpoints = app_usbd_class_iface_ep_count_get(p_cur_iface);
+
+        for (j = 0; j < endpoints; j++)
+        {
+            /* ENDPOINT DESCRIPTOR */
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(0x07); // bLength
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_DESCRIPTOR_ENDPOINT); // bDescriptorType = Endpoint
+
+            static app_usbd_class_ep_conf_t const * p_cur_ep = NULL;
+            p_cur_ep = app_usbd_class_iface_ep_get(p_cur_iface, j);
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(app_usbd_class_ep_address_get(p_cur_ep)); // bEndpointAddress
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(APP_USBD_DESCRIPTOR_EP_ATTR_TYPE_INTERRUPT); // bmAttributes
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(LSB_16(NRF_DRV_USBD_EPSIZE)); // wMaxPacketSize LSB
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(MSB_16(NRF_DRV_USBD_EPSIZE)); // wMaxPacketSize MSB
+            APP_USBD_CLASS_DESCRIPTOR_WRITE(p_kbd->specific.inst.hid_inst.p_ep_interval[j]); // bInterval
+        }
+    }
+
+    APP_USBD_CLASS_DESCRIPTOR_END();
+}
+
+
+ret_code_t hid_kbd_on_set_protocol(app_usbd_hid_kbd_t const * p_kbd, app_usbd_hid_user_event_t ev)
+{
+    app_usbd_hid_kbd_ctx_t * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    if (ev == APP_USBD_HID_USER_EVT_SET_BOOT_PROTO)
+    {
+        p_kbd_ctx->hid_ctx.selected_protocol = APP_USBD_HID_PROTO_BOOT;
+    }
+    else if (ev == APP_USBD_HID_USER_EVT_SET_REPORT_PROTO)
+    {
+        p_kbd_ctx->hid_ctx.selected_protocol = APP_USBD_HID_PROTO_REPORT;
+    }
+    else
+    {
+        return NRF_ERROR_NOT_SUPPORTED;
+    }
+    return NRF_SUCCESS;
+}
+
+
+static ret_code_t hid_kbd_on_idle(app_usbd_class_inst_t const * p_inst, uint8_t report_id)
+{
+    UNUSED_PARAMETER(report_id);
+    app_usbd_hid_kbd_t const * p_kbd    = (app_usbd_hid_kbd_t const *)p_inst;
+    app_usbd_hid_kbd_ctx_t      * p_kbd_ctx = hid_kbd_ctx_get(p_kbd);
+    nrf_drv_usbd_ep_t ep_addr = app_usbd_hid_epin_addr_get(p_inst);
+    app_usbd_hid_state_flag_clr(&p_kbd_ctx->hid_ctx, APP_USBD_HID_STATE_FLAG_TRANS_IN_PROGRESS);
+
+    app_usbd_hid_report_buffer_t const * p_rep_buffer = hid_kbd_rep_buffer_get(p_kbd);
+    NRF_DRV_USBD_TRANSFER_IN(transfer, p_rep_buffer->p_buff, p_rep_buffer->size);
+
+    ret_code_t ret;
+    CRITICAL_REGION_ENTER();
+    ret = app_usbd_ep_transfer(ep_addr, &transfer);
+    if (ret == NRF_SUCCESS)
+    {
+        app_usbd_hid_state_flag_set(&p_kbd_ctx->hid_ctx, APP_USBD_HID_STATE_FLAG_TRANS_IN_PROGRESS);
+    }
+    CRITICAL_REGION_EXIT();
+    
+    return NRF_SUCCESS;
 }
 
 /** @} */
 
 const app_usbd_hid_methods_t app_usbd_hid_kbd_methods = {
-        .on_get_report = hid_kbd_on_get_report,
-        .on_set_report = hid_kbd_on_set_report,
-        .ep_transfer_in = hid_kbd_ep_transfer_in,
-        .ep_transfer_out = NULL,
+    .on_get_report              = hid_kbd_on_get_report,
+    .on_set_report              = hid_kbd_on_set_report,
+    .ep_transfer_in             = hid_kbd_ep_transfer_in,
+    .ep_transfer_out            = NULL,
+    .subclass_length            = hid_kbd_get_class_descriptors_length,
+    .subclass_data              = hid_kbd_get_class_descriptors_data,
+    .on_idle                    = hid_kbd_on_idle,
 };
 
 const app_usbd_class_methods_t app_usbd_hid_kbd_class_methods = {
-        .event_handler = hid_kbd_event_handler,
-        .get_descriptors = hid_kbd_get_descriptors,
+    .event_handler            = hid_kbd_event_handler,
+    .feed_descriptors         = hid_kbd_feed_descriptors,
 };
 
-#endif // APP_USBD_HID_KBD_ENABLED
+#endif //NRF_MODULE_ENABLED(APP_USBD_HID_KBD)

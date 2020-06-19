@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(NRF_BLE_QWR)
@@ -59,25 +59,30 @@ ret_code_t nrf_ble_qwr_init(nrf_ble_qwr_t            * p_qwr,
         return NRF_ERROR_INVALID_STATE;
     }
 
+    p_qwr->error_handler = p_qwr_init->error_handler;
+    p_qwr->initialized   = NRF_BLE_QWR_INITIALIZED;
+    p_qwr->conn_handle   = BLE_CONN_HANDLE_INVALID;
+#if (NRF_BLE_QWR_MAX_ATTR > 0)
     memset(p_qwr->attr_handles, 0, sizeof(p_qwr->attr_handles));
     p_qwr->nb_registered_attr        = 0;
-    p_qwr->error_handler             = p_qwr_init->error_handler;
     p_qwr->is_user_mem_reply_pending = false;
-    p_qwr->conn_handle               = BLE_CONN_HANDLE_INVALID;
-    p_qwr->initialized               = NRF_BLE_QWR_INITIALIZED;
     p_qwr->mem_buffer                = p_qwr_init->mem_buffer;
     p_qwr->callback                  = p_qwr_init->callback;
     p_qwr->nb_written_handles        = 0;
+#endif
     return NRF_SUCCESS;
 }
 
 
+#if (NRF_BLE_QWR_MAX_ATTR > 0)
 ret_code_t nrf_ble_qwr_attr_register(nrf_ble_qwr_t * p_qwr, uint16_t attr_handle)
 {
     VERIFY_PARAM_NOT_NULL(p_qwr);
     VERIFY_MODULE_INITIALIZED();
 
-    if (p_qwr->nb_registered_attr == NRF_BLE_QWR_ATTR_LIST_SIZE)
+    if ((p_qwr->nb_registered_attr == NRF_BLE_QWR_MAX_ATTR)
+        || (p_qwr->mem_buffer.p_mem == NULL)
+        || (p_qwr->mem_buffer.len == 0))
     {
         return (NRF_ERROR_NO_MEM);
     }
@@ -145,6 +150,7 @@ ret_code_t nrf_ble_qwr_value_get(nrf_ble_qwr_t * p_qwr,
     *p_len = cur_len;
     return NRF_SUCCESS;
 }
+#endif
 
 
 ret_code_t nrf_ble_qwr_conn_handle_assign(nrf_ble_qwr_t * p_qwr,
@@ -165,7 +171,12 @@ static void user_mem_reply(nrf_ble_qwr_t * p_qwr)
 {
     if (p_qwr->is_user_mem_reply_pending)
     {
-        ret_code_t err_code = sd_ble_user_mem_reply(p_qwr->conn_handle, &p_qwr->mem_buffer);
+        ret_code_t err_code;
+#if (NRF_BLE_QWR_MAX_ATTR == 0)
+        err_code = sd_ble_user_mem_reply(p_qwr->conn_handle, NULL);
+#else
+        err_code = sd_ble_user_mem_reply(p_qwr->conn_handle, &p_qwr->mem_buffer);
+#endif
         if (err_code == NRF_SUCCESS)
         {
             p_qwr->is_user_mem_reply_pending = false;
@@ -190,13 +201,11 @@ static void user_mem_reply(nrf_ble_qwr_t * p_qwr)
 static void on_user_mem_request(nrf_ble_qwr_t          * p_qwr,
                                 ble_common_evt_t const * p_common_evt)
 {
-    if (p_common_evt->conn_handle == p_qwr->conn_handle)
+    if ((p_common_evt->params.user_mem_request.type == BLE_USER_MEM_TYPE_GATTS_QUEUED_WRITES) &&
+        (p_common_evt->conn_handle == p_qwr->conn_handle))
     {
-        if (p_common_evt->params.user_mem_request.type == BLE_USER_MEM_TYPE_GATTS_QUEUED_WRITES)
-        {
-            p_qwr->is_user_mem_reply_pending = true;
-            user_mem_reply(p_qwr);
-        }
+        p_qwr->is_user_mem_reply_pending = true;
+        user_mem_reply(p_qwr);
     }
 }
 
@@ -209,17 +218,18 @@ static void on_user_mem_request(nrf_ble_qwr_t          * p_qwr,
 static void on_user_mem_release(nrf_ble_qwr_t          * p_qwr,
                                 ble_common_evt_t const * p_common_evt)
 {
-    if (p_common_evt->conn_handle == p_qwr->conn_handle)
+#if (NRF_BLE_QWR_MAX_ATTR > 0)
+    if ((p_common_evt->params.user_mem_release.type == BLE_USER_MEM_TYPE_GATTS_QUEUED_WRITES) &&
+        (p_common_evt->conn_handle == p_qwr->conn_handle))
     {
-        if (p_common_evt->params.user_mem_release.type == BLE_USER_MEM_TYPE_GATTS_QUEUED_WRITES)
-        {
-            // Cancel the current operation.
-            p_qwr->nb_written_handles = 0;
-        }
+        // Cancel the current operation.
+        p_qwr->nb_written_handles = 0;
     }
+#endif
 }
 
 
+#if (NRF_BLE_QWR_MAX_ATTR > 0)
 /**@brief Handle a prepare write event.
  *
  * @param[in]   p_qwr        QWR structure.
@@ -362,7 +372,7 @@ static void on_cancel_write(nrf_ble_qwr_t               * p_qwr,
     }
     p_qwr->nb_written_handles = 0;
 }
-
+#endif
 
 /**@brief Handle a rw_authorize_request event.
  *
@@ -378,11 +388,38 @@ static void on_rw_authorize_request(nrf_ble_qwr_t         * p_qwr,
     }
 
     ble_gatts_evt_rw_authorize_request_t const * p_auth_req = &p_gatts_evt->params.authorize_request;
+
     if (p_auth_req->type != BLE_GATTS_AUTHORIZE_TYPE_WRITE)
     {
         return;
     }
 
+#if (NRF_BLE_QWR_MAX_ATTR == 0)
+    // Handle only queued write related operations.
+    if ((p_auth_req->request.write.op != BLE_GATTS_OP_PREP_WRITE_REQ) &&
+        (p_auth_req->request.write.op != BLE_GATTS_OP_EXEC_WRITE_REQ_NOW) &&
+        (p_auth_req->request.write.op != BLE_GATTS_OP_EXEC_WRITE_REQ_CANCEL))
+    {
+        return;
+    }
+
+    // Prepare the response.
+    ble_gatts_rw_authorize_reply_params_t auth_reply = {0};
+
+    auth_reply.type                     = BLE_GATTS_AUTHORIZE_TYPE_WRITE;
+    auth_reply.params.write.gatt_status = NRF_BLE_QWR_REJ_REQUEST_ERR_CODE;
+    if (p_auth_req->request.write.op == BLE_GATTS_OP_EXEC_WRITE_REQ_CANCEL)
+    {
+        auth_reply.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
+    }
+
+    ret_code_t err_code = sd_ble_gatts_rw_authorize_reply(p_gatts_evt->conn_handle, &auth_reply);
+    if (err_code != NRF_SUCCESS)
+    {
+        // Report error to application.
+        p_qwr->error_handler(err_code);
+    }
+#else
     switch (p_auth_req->request.write.op)
     {
         case BLE_GATTS_OP_PREP_WRITE_REQ:
@@ -401,20 +438,24 @@ static void on_rw_authorize_request(nrf_ble_qwr_t         * p_qwr,
             // No implementation needed.
             break;
     }
+#endif
 }
 
 
-void nrf_ble_qwr_on_ble_evt(nrf_ble_qwr_t * p_qwr,
-                            ble_evt_t     * p_ble_evt)
+void nrf_ble_qwr_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
-    VERIFY_PARAM_NOT_NULL_VOID(p_qwr);
+    VERIFY_PARAM_NOT_NULL_VOID(p_context);
     VERIFY_PARAM_NOT_NULL_VOID(p_ble_evt);
+
+    nrf_ble_qwr_t * p_qwr = (nrf_ble_qwr_t *)p_context;
+
     VERIFY_MODULE_INITIALIZED_VOID();
 
     if (p_ble_evt->evt.common_evt.conn_handle == p_qwr->conn_handle)
     {
         user_mem_reply(p_qwr);
     }
+
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_EVT_USER_MEM_REQUEST:
@@ -432,8 +473,10 @@ void nrf_ble_qwr_on_ble_evt(nrf_ble_qwr_t * p_qwr,
         case BLE_GAP_EVT_DISCONNECTED:
             if (p_ble_evt->evt.gap_evt.conn_handle == p_qwr->conn_handle)
             {
-                p_qwr->conn_handle        = BLE_CONN_HANDLE_INVALID;
+                p_qwr->conn_handle = BLE_CONN_HANDLE_INVALID;
+#if (NRF_BLE_QWR_MAX_ATTR > 0)
                 p_qwr->nb_written_handles = 0;
+#endif
             }
             break; // BLE_GAP_EVT_DISCONNECTED
 

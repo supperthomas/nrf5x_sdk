@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(NRF_PWR_MGMT)
@@ -49,7 +49,7 @@
 #include "nrf_log_ctrl.h"
 #include "app_util_platform.h"
 
-#define NRF_LOG_MODULE_NAME "NRF_PWR_MGMT"
+#define NRF_LOG_MODULE_NAME pwr_mgmt
 #if NRF_PWR_MGMT_CONFIG_LOG_ENABLED
     #define NRF_LOG_LEVEL       NRF_PWR_MGMT_CONFIG_LOG_LEVEL
     #define NRF_LOG_INFO_COLOR  NRF_PWR_MGMT_CONFIG_INFO_COLOR
@@ -58,11 +58,11 @@
     #define NRF_LOG_LEVEL       0
 #endif // NRF_PWR_MGMT_CONFIG_LOG_ENABLED
 #include "nrf_log.h"
-
+NRF_LOG_MODULE_REGISTER();
 
 #ifdef SOFTDEVICE_PRESENT
     #include "nrf_soc.h"
-    #include "softdevice_handler.h"
+    #include "nrf_sdh.h"
 #endif // SOFTDEVICE_PRESENT
 
 
@@ -85,15 +85,15 @@ static nrf_mtx_t            m_sysoff_mtx;       /**< Module API lock.*/
 static bool                 m_shutdown_started; /**< True if application started the shutdown preparation. */
 static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator. */
 
-
-#if NRF_PWR_MGMT_CONFIG_FPU_SUPPORT_ENABLED
+#if (NRF_PWR_MGMT_CONFIG_FPU_SUPPORT_ENABLED && __FPU_PRESENT)
     #define PWR_MGMT_FPU_SLEEP_PREPARE()     pwr_mgmt_fpu_sleep_prepare()
 
      __STATIC_INLINE void pwr_mgmt_fpu_sleep_prepare(void)
      {
-        uint32_t fpscr;
+        uint32_t original_fpscr;
+
         CRITICAL_REGION_ENTER();
-        fpscr = __get_FPSCR();
+        original_fpscr = __get_FPSCR();
         /*
          * Clear FPU exceptions.
          * Without this step, the FPU interrupt is marked as pending,
@@ -105,18 +105,24 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
          * - IXC - Inexact cumulative exception bit.
          * - IDC - Input Denormal cumulative exception bit.
          */
-        __set_FPSCR(fpscr & ~0x9Fu);
+        __set_FPSCR(original_fpscr & ~0x9Fu);
         __DMB();
         NVIC_ClearPendingIRQ(FPU_IRQn);
         CRITICAL_REGION_EXIT();
 
         /*
-         * Assert no critical FPU exception is signaled:
+         * The last chance to indicate an error in FPU to the user 
+         * as the FPSCR is now cleared
+         *
+         * This assert is related to previous FPU operations 
+         * and not power management.
+         *
+         * Critical FPU exceptions signaled:
          * - IOC - Invalid Operation cumulative exception bit.
          * - DZC - Division by Zero cumulative exception bit.
          * - OFC - Overflow cumulative exception bit.
          */
-        ASSERT((fpscr & 0x07) == 0);
+        ASSERT((original_fpscr & 0x7) == 0);
      }
 #else
     #define PWR_MGMT_FPU_SLEEP_PREPARE()
@@ -155,7 +161,7 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
 
     #define PWR_MGMT_CPU_USAGE_MONITOR_INIT()    pwr_mgmt_cpu_usage_monitor_init()
     #define PWR_MGMT_CPU_USAGE_MONITOR_UPDATE()  pwr_mgmt_cpu_usage_monitor_update()
-    #define PWR_MGMT_CPU_USAGE_MONITOR_SUMMARY() NRF_LOG_INFO("Maximum CPU usage: %u%%\r\n", \
+    #define PWR_MGMT_CPU_USAGE_MONITOR_SUMMARY() NRF_LOG_INFO("Maximum CPU usage: %u%%", \
                                                               m_max_cpu_usage)
     #define PWR_MGMT_CPU_USAGE_MONITOR_SECTION_ENTER()  \
         {                                               \
@@ -190,7 +196,7 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
         delta = app_timer_cnt_diff_compute(ticks, m_ticks_last);
         cpu_usage = 100 * (delta - m_ticks_sleeping) / delta;
 
-        NRF_LOG_DEBUG("CPU Usage: %d%%\r\n", cpu_usage);
+        NRF_LOG_INFO("CPU Usage: %u%%", cpu_usage);
         if (m_max_cpu_usage < cpu_usage)
         {
             m_max_cpu_usage = cpu_usage;
@@ -265,9 +271,9 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
 
 
 #ifdef PWR_MGMT_SLEEP_IN_CRITICAL_SECTION_REQUIRED
-    #define PWR_MGMT_SLEEP_INIT()       pwr_mgmt_sleep_init()
-    #define PWR_MGMT_SLEEP_LOCK()       CRITICAL_REGION_ENTER()
-    #define PWR_MGMT_SLEEP_RELEASE()    CRITICAL_REGION_EXIT()
+    #define PWR_MGMT_SLEEP_INIT()           pwr_mgmt_sleep_init()
+    #define PWR_MGMT_SLEEP_LOCK_ACQUIRE()   CRITICAL_REGION_ENTER()
+    #define PWR_MGMT_SLEEP_LOCK_RELEASE()   CRITICAL_REGION_EXIT()
 
     __STATIC_INLINE void pwr_mgmt_sleep_init(void)
     {
@@ -279,8 +285,8 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
 
 #else
     #define PWR_MGMT_SLEEP_INIT()
-    #define PWR_MGMT_SLEEP_LOCK()
-    #define PWR_MGMT_SLEEP_RELEASE()
+    #define PWR_MGMT_SLEEP_LOCK_ACQUIRE()
+    #define PWR_MGMT_SLEEP_LOCK_RELEASE()
 #endif // PWR_MGMT_SLEEP_IN_CRITICAL_SECTION_REQUIRED
 
 
@@ -317,7 +323,7 @@ static nrf_section_iter_t   m_handlers_iter;    /**< Shutdown handlers iterator.
 
 ret_code_t nrf_pwr_mgmt_init(void)
 {
-    NRF_LOG_INFO("Init\r\n");
+    NRF_LOG_INFO("Init");
 
     m_shutdown_started = false;
     nrf_mtx_init(&m_sysoff_mtx);
@@ -334,16 +340,17 @@ ret_code_t nrf_pwr_mgmt_init(void)
 void nrf_pwr_mgmt_run(void)
 {
     PWR_MGMT_FPU_SLEEP_PREPARE();
-    PWR_MGMT_SLEEP_LOCK();
+    PWR_MGMT_SLEEP_LOCK_ACQUIRE();
     PWR_MGMT_CPU_USAGE_MONITOR_SECTION_ENTER();
     PWR_MGMT_DEBUG_PIN_SET();
 
     // Wait for an event.
 #ifdef SOFTDEVICE_PRESENT
-    if (softdevice_handler_is_enabled())
+    if (nrf_sdh_is_enabled())
     {
         ret_code_t ret_code = sd_app_evt_wait();
         ASSERT((ret_code == NRF_SUCCESS) || (ret_code == NRF_ERROR_SOFTDEVICE_NOT_ENABLED));
+        UNUSED_VARIABLE(ret_code);
     }
     else
 #endif // SOFTDEVICE_PRESENT
@@ -357,12 +364,12 @@ void nrf_pwr_mgmt_run(void)
 
     PWR_MGMT_DEBUG_PIN_CLEAR();
     PWR_MGMT_CPU_USAGE_MONITOR_SECTION_EXIT();
-    PWR_MGMT_SLEEP_RELEASE();
+    PWR_MGMT_SLEEP_LOCK_RELEASE();
 }
 
 void nrf_pwr_mgmt_feed(void)
 {
-    NRF_LOG_DEBUG("Feed\r\n");
+    NRF_LOG_DEBUG("Feed");
     // It does not stop started shutdown process.
     PWR_MGMT_STANDBY_TIMEOUT_CLEAR();
 }
@@ -371,7 +378,7 @@ void nrf_pwr_mgmt_feed(void)
  */
 static void shutdown_process(void)
 {
-    NRF_LOG_INFO("Shutdown started. Type %d\r\n", m_pwr_mgmt_evt);
+    NRF_LOG_INFO("Shutdown started. Type %d", m_pwr_mgmt_evt);
     // Executing all callbacks.
     for (/* m_handlers_iter is initialized in nrf_pwr_mgmt_init(). Thanks to that each handler is
             called only once.*/;
@@ -382,18 +389,18 @@ static void shutdown_process(void)
             (nrf_pwr_mgmt_shutdown_handler_t *) nrf_section_iter_get(&m_handlers_iter);
         if ((*p_handler)(m_pwr_mgmt_evt))
         {
-            NRF_LOG_INFO("SysOff handler 0x%08X => ready\r\n", (unsigned int)*p_handler);
+            NRF_LOG_INFO("SysOff handler 0x%08X => ready", (unsigned int)*p_handler);
         }
         else
         {
             // One of the modules is not ready.
-            NRF_LOG_INFO("SysOff handler 0x%08X => blocking\r\n", (unsigned int)*p_handler);
+            NRF_LOG_INFO("SysOff handler 0x%08X => blocking", (unsigned int)*p_handler);
             return;
         }
     }
 
     PWR_MGMT_CPU_USAGE_MONITOR_SUMMARY();
-    NRF_LOG_WARNING("Shutdown\r\n");
+    NRF_LOG_INFO("Shutdown complete.");
     NRF_LOG_FINAL_FLUSH();
 
     if ((m_pwr_mgmt_evt == NRF_PWR_MGMT_EVT_PREPARE_RESET)
@@ -405,10 +412,21 @@ static void shutdown_process(void)
     {
         // Enter System OFF.
 #ifdef SOFTDEVICE_PRESENT
-        if (softdevice_handler_is_enabled())
+        if (nrf_sdh_is_enabled())
         {
             ret_code_t ret_code = sd_power_system_off();
             ASSERT((ret_code == NRF_SUCCESS) || (ret_code == NRF_ERROR_SOFTDEVICE_NOT_ENABLED));
+            UNUSED_VARIABLE(ret_code);
+#ifdef DEBUG
+            while (true)
+            {
+                /* Since the CPU is kept on in an emulated System OFF mode, it is recommended
+                 * to add an infinite loop directly after entering System OFF, to prevent
+                 * the CPU from executing code that normally should not be executed. */
+                __WFE();
+
+            }
+#endif
         }
 #endif // SOFTDEVICE_PRESENT
         nrf_power_system_off();
@@ -449,7 +467,7 @@ void nrf_pwr_mgmt_shutdown(nrf_pwr_mgmt_shutdown_t shutdown_type)
     }
 
     ASSERT(m_shutdown_started);
-    NRF_LOG_INFO("Shutdown request %d\r\n", shutdown_type);
+    NRF_LOG_INFO("Shutdown request %d", shutdown_type);
 
 #if NRF_PWR_MGMT_CONFIG_USE_SCHEDULER
     ret_code_t ret_code = app_sched_event_put(NULL, 0, scheduler_shutdown_handler);

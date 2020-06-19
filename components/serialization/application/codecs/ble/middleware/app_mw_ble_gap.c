@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble_gap.h"
 #include <stdint.h>
@@ -45,6 +45,7 @@
 #include "ble_gap_app.h"
 #include "app_error.h"
 #include "app_ble_gap_sec_keys.h"
+#include "ser_config.h"
 
 extern ser_ble_gap_app_keyset_t m_app_keys_table[SER_MAX_CONNECTIONS];
 
@@ -85,7 +86,7 @@ typedef union
 
 static gap_command_output_params_t m_output_params; /**< BLE command output parameters. */
 
-static void * mp_out_params[1];
+static void * mp_out_params[3];
 
 static void tx_buf_alloc(uint8_t * * p_data, uint16_t * p_len)
 {
@@ -99,6 +100,7 @@ static void tx_buf_alloc(uint8_t * * p_data, uint16_t * p_len)
     *p_data[0] = SER_PKT_TYPE_CMD;
     *p_len    -= 1;
 }
+
 /**@brief Command response callback function for @ref sd_ble_gap_adv_start BLE command.
  *
  * Callback for decoding the command response return code.
@@ -122,7 +124,12 @@ static uint32_t gap_adv_start_rsp_dec(const uint8_t * p_buffer, uint16_t length)
 #ifndef _sd_ble_gap_adv_start
 #define _sd_ble_gap_adv_start sd_ble_gap_adv_start
 #endif
-uint32_t _sd_ble_gap_adv_start(ble_gap_adv_params_t const * const p_adv_params
+uint32_t _sd_ble_gap_adv_start(
+#if NRF_SD_BLE_API_VERSION > 5
+         uint8_t adv_handle
+#else
+         ble_gap_adv_params_t const * const p_adv_params
+#endif
 #if NRF_SD_BLE_API_VERSION >= 4
         ,uint8_t conn_cfg_tag
 #endif
@@ -133,7 +140,12 @@ uint32_t _sd_ble_gap_adv_start(ble_gap_adv_params_t const * const p_adv_params
 
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
 
-    const uint32_t err_code = ble_gap_adv_start_req_enc(p_adv_params,
+    const uint32_t err_code = ble_gap_adv_start_req_enc(
+#if NRF_SD_BLE_API_VERSION > 5
+                                                        adv_handle,
+#else
+                                                        p_adv_params,
+#endif
 #if NRF_SD_BLE_API_VERSION >= 4
                                                         conn_cfg_tag,
 #endif
@@ -146,7 +158,6 @@ uint32_t _sd_ble_gap_adv_start(ble_gap_adv_params_t const * const p_adv_params
                                       (++buffer_length),
                                       gap_adv_start_rsp_dec);
 }
-
 
 /**@brief Command response callback function for @ref ble_gap_device_name_get_req_enc BLE command.
  *
@@ -388,6 +399,7 @@ uint32_t _sd_ble_gap_ppcp_set(ble_gap_conn_params_t const * const p_conn_params)
  *
  * @return Decoded command response return code.
  */
+#if NRF_SD_BLE_API_VERSION <= 5
 static uint32_t gap_adv_data_set_rsp_dec(const uint8_t * p_buffer, uint16_t length)
 {
     uint32_t result_code;
@@ -398,7 +410,6 @@ static uint32_t gap_adv_data_set_rsp_dec(const uint8_t * p_buffer, uint16_t leng
 
     return result_code;
 }
-
 #ifndef _sd_ble_gap_adv_data_set
 #define _sd_ble_gap_adv_data_set sd_ble_gap_adv_data_set
 #endif
@@ -424,7 +435,7 @@ uint32_t _sd_ble_gap_adv_data_set(uint8_t const * const p_data,
                                       (++buffer_length),
                                       gap_adv_data_set_rsp_dec);
 }
-
+#endif
 
 /**@brief Command response callback function for @ref sd_ble_gap_conn_param_update BLE command.
  *
@@ -702,13 +713,23 @@ static uint32_t gap_adv_stop_rsp_dec(const uint8_t * p_buffer, uint16_t length)
 #ifndef _sd_ble_gap_adv_stop
 #define _sd_ble_gap_adv_stop sd_ble_gap_adv_stop
 #endif
-uint32_t _sd_ble_gap_adv_stop(void)
+uint32_t _sd_ble_gap_adv_stop(
+#if NRF_SD_BLE_API_VERSION > 5
+       uint8_t adv_handle
+#else
+        void
+#endif
+        )
 {
     uint8_t * p_buffer;
     uint32_t  buffer_length = 0;
 
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
-    const uint32_t err_code = ble_gap_adv_stop_req_enc(&(p_buffer[1]),
+    const uint32_t err_code = ble_gap_adv_stop_req_enc(
+#if NRF_SD_BLE_API_VERSION > 5
+                                                       adv_handle,
+#endif
+                                                       &(p_buffer[1]),
                                                        &buffer_length);
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
@@ -983,14 +1004,23 @@ static uint32_t gap_tx_power_set_rsp_dec(const uint8_t * p_buffer, uint16_t leng
 #ifndef _sd_ble_gap_tx_power_set
 #define _sd_ble_gap_tx_power_set sd_ble_gap_tx_power_set
 #endif
-uint32_t _sd_ble_gap_tx_power_set(int8_t tx_power)
+uint32_t _sd_ble_gap_tx_power_set(
+#if NRF_SD_BLE_API_VERSION > 5
+                   uint8_t role, uint16_t handle,
+#endif
+                   int8_t tx_power)
 {
     uint8_t * p_buffer;
     uint32_t  buffer_length = 0;
 
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
+#if NRF_SD_BLE_API_VERSION > 5
+    const uint32_t err_code = ble_gap_tx_power_set_req_enc(role, handle, tx_power,
+                                                               &(p_buffer[1]), &buffer_length);
+#else
     const uint32_t err_code = ble_gap_tx_power_set_req_enc(tx_power,
                                                            &(p_buffer[1]), &buffer_length);
+#endif
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
 
@@ -1000,6 +1030,7 @@ uint32_t _sd_ble_gap_tx_power_set(int8_t tx_power)
                                       gap_tx_power_set_rsp_dec);
 }
 
+#ifndef S112
 /**@brief Command response callback function for @ref sd_ble_gap_scan_stop BLE command.
  *
  * Callback for decoding the output parameters and the command response return code.
@@ -1038,7 +1069,9 @@ uint32_t _sd_ble_gap_scan_stop(void)
                                                        &buffer_length);
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
-
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+    app_ble_gap_scan_data_unset(true);
+#endif
     //@note: Increment buffer length as internally managed packet type field must be included.
     return ser_sd_transport_cmd_write(p_buffer,
                                       (++buffer_length),
@@ -1164,6 +1197,13 @@ static uint32_t gap_scan_start_rsp_dec(const uint8_t * p_buffer, uint16_t length
                                                          length,
                                                          &result_code);
 
+    if (result_code != NRF_SUCCESS)
+    {
+#if NRF_SD_BLE_API_VERSION > 5
+    	app_ble_gap_scan_data_unset(true);
+#endif
+    }
+
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
 
@@ -1173,18 +1213,32 @@ static uint32_t gap_scan_start_rsp_dec(const uint8_t * p_buffer, uint16_t length
 #ifndef _sd_ble_gap_scan_start
 #define _sd_ble_gap_scan_start sd_ble_gap_scan_start
 #endif
-uint32_t _sd_ble_gap_scan_start(ble_gap_scan_params_t const * const p_scan_params)
+uint32_t _sd_ble_gap_scan_start(ble_gap_scan_params_t const * const p_scan_params
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+        ,ble_data_t const * p_adv_report_buffer
+#endif
+        )
 {
     uint8_t * p_buffer;
     uint32_t  buffer_length = 0;
+    uint32_t  err_code;
 
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
-    const uint32_t err_code = ble_gap_scan_start_req_enc(p_scan_params,
+
+    err_code = ble_gap_scan_start_req_enc(p_scan_params,
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+                                                         p_adv_report_buffer,
+#endif
                                                          &(p_buffer[1]),
                                                          &buffer_length);
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
 
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+    if (p_adv_report_buffer) {
+        app_ble_gap_scan_data_set(p_adv_report_buffer->p_data);
+    }
+#endif
     //@note: Increment buffer length as internally managed packet type field must be included.
     return ser_sd_transport_cmd_write(p_buffer,
                                       (++buffer_length),
@@ -1234,6 +1288,7 @@ uint32_t _sd_ble_gap_encrypt( uint16_t                    conn_handle,
                                       (++buffer_length),
                                       gap_encrypt_rsp_dec);
 }
+#endif //!S112
 
 /**@brief Command response callback function for @ref sd_ble_gap_rssi_get BLE command.
  *
@@ -1251,6 +1306,9 @@ static uint32_t gap_rssi_get_rsp_dec(const uint8_t * p_buffer, uint16_t length)
     const uint32_t err_code = ble_gap_rssi_get_rsp_dec(p_buffer,
                                                       length,
                                                       (int8_t *) mp_out_params[0],
+#if NRF_SD_BLE_API_VERSION > 5
+                                                      (uint8_t *) mp_out_params[1],
+#endif
                                                       &result_code);
 
     //@note: Should never fail.
@@ -1263,7 +1321,11 @@ static uint32_t gap_rssi_get_rsp_dec(const uint8_t * p_buffer, uint16_t length)
 #define _sd_ble_gap_rssi_get sd_ble_gap_rssi_get
 #endif
 uint32_t _sd_ble_gap_rssi_get(uint16_t  conn_handle,
-                             int8_t  * p_rssi)
+                             int8_t  * p_rssi
+#if NRF_SD_BLE_API_VERSION > 5
+                             ,uint8_t * p_ch_index
+#endif
+)
 {
     uint8_t * p_buffer;
     uint32_t  buffer_length = 0;
@@ -1271,7 +1333,12 @@ uint32_t _sd_ble_gap_rssi_get(uint16_t  conn_handle,
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
     mp_out_params[0] = p_rssi;
 
+#if NRF_SD_BLE_API_VERSION > 5
+    mp_out_params[1] = p_ch_index;
+    const uint32_t err_code = ble_gap_rssi_get_req_enc(conn_handle, p_rssi, p_ch_index, &(p_buffer[1]), &buffer_length);
+#else
     const uint32_t err_code = ble_gap_rssi_get_req_enc(conn_handle, p_rssi, &(p_buffer[1]), &buffer_length);
+#endif
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
 
@@ -1722,7 +1789,7 @@ uint32_t _sd_ble_gap_device_identities_set(ble_gap_id_key_t const * const * pp_i
                                       gap_device_identities_set_rsp_dec);
 }
 
-#if NRF_SD_BLE_API_VERSION >= 4
+#if NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
 /**@brief Command response callback function for @ref sd_ble_gap_data_length_update BLE command.
  *
  * Callback for decoding the output parameters and the command response return code.
@@ -1769,10 +1836,10 @@ uint32_t _sd_ble_gap_data_length_update(uint16_t conn_handle,
                                      gap_data_length_update_rsp_dec);
 }
 
-#endif
+#endif // NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
 
 #if NRF_SD_BLE_API_VERSION >= 5
-/**@brief Command response callback function for @ref sd_ble_gap_phy_request BLE command.
+/**@brief Command response callback function for @ref sd_ble_gap_phy_update BLE command.
  *
  * Callback for decoding the output parameters and the command response return code.
  *
@@ -1781,11 +1848,11 @@ uint32_t _sd_ble_gap_data_length_update(uint16_t conn_handle,
  *
  * @return Decoded command response return code.
  */
-static uint32_t gap_phy_request_rsp_dec(const uint8_t * p_buffer, uint16_t length)
+static uint32_t gap_phy_update_rsp_dec(const uint8_t * p_buffer, uint16_t length)
 {
     uint32_t result_code = 0;
 
-    const uint32_t err_code = ble_gap_phy_request_rsp_dec(p_buffer,
+    const uint32_t err_code = ble_gap_phy_update_rsp_dec(p_buffer,
                                                           length,
                                                           &result_code);
 
@@ -1797,17 +1864,17 @@ static uint32_t gap_phy_request_rsp_dec(const uint8_t * p_buffer, uint16_t lengt
     return result_code;
 }
 
-#ifndef _sd_ble_gap_phy_request
-#define _sd_ble_gap_phy_request sd_ble_gap_phy_request
+#ifndef _sd_ble_gap_phy_update
+#define _sd_ble_gap_phy_update sd_ble_gap_phy_update
 #endif
-uint32_t _sd_ble_gap_phy_request(uint16_t                     conn_handle,
+uint32_t _sd_ble_gap_phy_update(uint16_t                     conn_handle,
                                  ble_gap_phys_t const * const p_gap_phys)
 {
     uint8_t * p_buffer;
     uint32_t  buffer_length = 0;
 
     tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
-    const uint32_t err_code = ble_gap_phy_request_req_enc(conn_handle, p_gap_phys,
+    const uint32_t err_code = ble_gap_phy_update_req_enc(conn_handle, p_gap_phys,
                                                            &(p_buffer[1]), &buffer_length);
     //@note: Should never fail.
     APP_ERROR_CHECK(err_code);
@@ -1815,6 +1882,162 @@ uint32_t _sd_ble_gap_phy_request(uint16_t                     conn_handle,
     //@note: Increment buffer length as internally managed packet type field must be included.
     return ser_sd_transport_cmd_write(p_buffer,
                                       (++buffer_length),
-                                      gap_phy_request_rsp_dec);
+                                      gap_phy_update_rsp_dec);
 }
+#endif
+
+#if NRF_SD_BLE_API_VERSION >= 6
+/**@brief Command response callback function for @ref sd_ble_gap_adv_set_configure BLE command.
+ *
+ * Callback for decoding the output parameters and the command response return code.
+ *
+ * @param[in] p_buffer  Pointer to begin of command response buffer.
+ * @param[in] length    Length of data in bytes.
+ *
+ * @return Decoded command response return code.
+ */
+static uint32_t gap_adv_set_configure_rsp_dec(const uint8_t * p_buffer, uint16_t length)
+{
+    uint32_t result_code = 0;
+
+    uint32_t err_code = ble_gap_adv_set_configure_rsp_dec(p_buffer,
+                                                          length,
+                                                          (uint8_t *)mp_out_params[0],
+                                                          &result_code);
+
+    if (result_code != NRF_SUCCESS)
+    {
+    	app_ble_gap_adv_buf_addr_unregister(mp_out_params[1], false);
+    	app_ble_gap_adv_buf_addr_unregister(mp_out_params[2], false);
+    }
+
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    APP_ERROR_CHECK(err_code);
+
+    return result_code;
+}
+
+#ifndef _sd_ble_gap_adv_set_configure
+#define _sd_ble_gap_adv_set_configure sd_ble_gap_adv_set_configure
+#endif
+uint32_t _sd_ble_gap_adv_set_configure(uint8_t *p_adv_handle,
+                                       ble_gap_adv_data_t const *p_adv_data,
+                                       ble_gap_adv_params_t const *p_adv_params)
+{
+    uint8_t * p_buffer;
+    uint32_t  buffer_length = 0;
+
+    tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
+    
+    mp_out_params[0] = p_adv_handle;
+    if (p_adv_handle)
+    {
+        mp_out_params[1] = p_adv_data->adv_data.p_data;
+        mp_out_params[2] = p_adv_data->scan_rsp_data.p_data;
+    }
+    else
+    {
+        mp_out_params[1] =  NULL;
+        mp_out_params[2] =  NULL;
+    }
+
+    const uint32_t err_code = ble_gap_adv_set_configure_req_enc(p_adv_handle, p_adv_data, p_adv_params,
+                                                                &(p_buffer[1]), &buffer_length);
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    //@note: Increment buffer length as internally managed packet type field must be included.
+    return ser_sd_transport_cmd_write(p_buffer,
+                                      (++buffer_length),
+                                      gap_adv_set_configure_rsp_dec);
+}
+
+#ifndef S112
+/**@brief Command response callback function for @ref sd_ble_gap_qos_channel_survey_start BLE command.
+ *
+ * Callback for decoding the output parameters and the command response return code.
+ *
+ * @param[in] p_buffer  Pointer to begin of command response buffer.
+ * @param[in] length    Length of data in bytes.
+ *
+ * @return Decoded command response return code.
+ */
+static uint32_t gap_qos_channel_survey_start_rsp_dec(const uint8_t * p_buffer, uint16_t length)
+{
+    uint32_t result_code = 0;
+
+    uint32_t err_code = ble_gap_qos_channel_survey_start_rsp_dec(p_buffer,
+                                                                 length,
+                                                                 &result_code);
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    return result_code;
+}
+
+#ifndef _sd_ble_gap_qos_channel_survey_start
+#define _sd_ble_gap_qos_channel_survey_start sd_ble_gap_qos_channel_survey_start
+#endif
+uint32_t _sd_ble_gap_qos_channel_survey_start(uint32_t interval_us)
+{
+    uint8_t * p_buffer;
+    uint32_t  buffer_length = 0;
+
+    tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
+
+    const uint32_t err_code = ble_gap_qos_channel_survey_start_req_enc(interval_us,
+                                                                       &(p_buffer[1]), &buffer_length);
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    //@note: Increment buffer length as internally managed packet type field must be included.
+    return ser_sd_transport_cmd_write(p_buffer,
+                                      (++buffer_length),
+                                      gap_qos_channel_survey_start_rsp_dec);
+}
+
+/**@brief Command response callback function for @ref sd_ble_gap_qos_channel_survey_stop BLE command.
+ *
+ * Callback for decoding the output parameters and the command response return code.
+ *
+ * @param[in] p_buffer  Pointer to begin of command response buffer.
+ * @param[in] length    Length of data in bytes.
+ *
+ * @return Decoded command response return code.
+ */
+static uint32_t gap_qos_channel_survey_stop_rsp_dec(const uint8_t * p_buffer, uint16_t length)
+{
+    uint32_t result_code = 0;
+
+    uint32_t err_code = ble_gap_qos_channel_survey_stop_rsp_dec(p_buffer,
+                                                                 length,
+                                                                 &result_code);
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    return result_code;
+}
+
+#ifndef _sd_ble_gap_qos_channel_survey_stop
+#define _sd_ble_gap_qos_channel_survey_stop sd_ble_gap_qos_channel_survey_stop
+#endif
+uint32_t _sd_ble_gap_qos_channel_survey_stop(void)
+{
+    uint8_t * p_buffer;
+    uint32_t  buffer_length = 0;
+
+    tx_buf_alloc(&p_buffer, (uint16_t *)&buffer_length);
+
+    const uint32_t err_code = ble_gap_qos_channel_survey_stop_req_enc(&(p_buffer[1]), &buffer_length);
+    //@note: Should never fail.
+    APP_ERROR_CHECK(err_code);
+
+    //@note: Increment buffer length as internally managed packet type field must be included.
+    return ser_sd_transport_cmd_write(p_buffer,
+                                      (++buffer_length),
+                                      gap_qos_channel_survey_stop_rsp_dec);
+}
+#endif //!S112
 #endif

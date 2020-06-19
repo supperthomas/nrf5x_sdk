@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -53,7 +53,7 @@
 #include <stdbool.h>
 #include "sdk_errors.h"
 #include "ant_parameters.h"
-#include "ant_stack_handler_types.h"
+#include "nrf_sdh_ant.h"
 #include "ant_channel_config.h"
 #include "ant_bsc_pages.h"
 
@@ -70,11 +70,9 @@
 #define BSC_MSG_PERIOD_CADENCE   0x1FA6u                    ///< Message period in ticks, decimal 8102 (4.04 Hz).
 #define BSC_MSG_PERIOD_COMBINED  0x1F96u                    ///< Message period in ticks, decimal 8086 (4.05 Hz).
 
-
 #define BSC_EXT_ASSIGN           0x00                       ///< ANT ext assign (see Ext. Assign Channel Parameters in ant_parameters.h: @ref ant_parameters).
 #define BSC_DISP_CHANNEL_TYPE    CHANNEL_TYPE_SLAVE_RX_ONLY ///< Display BSC channel type.
 #define BSC_SENS_CHANNEL_TYPE    CHANNEL_TYPE_MASTER        ///< Sensor BSC channel type.
-
 
 /**@brief Select the basic ANT channel period (in ticks) for the BSC profile depending on the device type.
  *
@@ -115,7 +113,7 @@
                                     DEVICE_NUMBER,                              \
                                     NETWORK_NUMBER,                             \
                                     BSC_MSG_PERIOD)                             \
-static const ant_channel_config_t   NAME##_channel_bsc_disp_config =            \
+static const ant_channel_config_t   CONCAT_2(NAME, _channel_bsc_disp_config) =  \
     {                                                                           \
         .channel_number     = (CHANNEL_NUMBER),                                 \
         .channel_type       = BSC_DISP_CHANNEL_TYPE,                            \
@@ -127,7 +125,7 @@ static const ant_channel_config_t   NAME##_channel_bsc_disp_config =            
         .channel_period     = BSC_PERIOD_TICKS(DEVICE_TYPE, BSC_MSG_PERIOD),    \
         .network_number     = (NETWORK_NUMBER),                                 \
     }
-#define BSC_DISP_CHANNEL_CONFIG(NAME) &NAME##_channel_bsc_disp_config
+#define BSC_DISP_CHANNEL_CONFIG(NAME) &CONCAT_2(NAME, _channel_bsc_disp_config)
 
 /**@brief Initialize an ANT channel configuration structure for the BSC profile (Transmitter).
  *
@@ -164,15 +162,16 @@ static const ant_channel_config_t   NAME##_channel_bsc_sens_config =            
  * @param[in]  NAME                 Name of related instance.
  * @param[in]  EVT_HANDLER          Event handler to be called for handling events in the BSC profile.
  */
-#define BSC_DISP_PROFILE_CONFIG_DEF(NAME,                               \
-                                    EVT_HANDLER)                        \
-static ant_bsc_disp_cb_t            NAME##_bsc_disp_cb;                 \
-static const ant_bsc_disp_config_t  NAME##_profile_bsc_disp_config =    \
-    {                                                                   \
-        .p_cb               = &NAME##_bsc_disp_cb,                      \
-        .evt_handler        = (EVT_HANDLER),                            \
+#define BSC_DISP_PROFILE_CONFIG_DEF(NAME,                                       \
+                                    EVT_HANDLER)                                \
+static ant_bsc_disp_cb_t            CONCAT_2(NAME, _bsc_disp_cb);               \
+static const ant_bsc_disp_config_t  CONCAT_2(NAME, _profile_bsc_disp_config) =  \
+    {                                                                           \
+        .p_cb               = &CONCAT_2(NAME, _bsc_disp_cb),                    \
+        .evt_handler        = (EVT_HANDLER),                                    \
     }
-#define BSC_DISP_PROFILE_CONFIG(NAME) &NAME##_profile_bsc_disp_config
+#define BSC_DISP_PROFILE_CONFIG(NAME) &CONCAT_2(NAME, _profile_bsc_disp_config)
+
 
 /**@brief Initialize an ANT profile configuration structure for the BSC profile (Sensor).
  *
@@ -182,21 +181,22 @@ static const ant_bsc_disp_config_t  NAME##_profile_bsc_disp_config =    \
  * @param[in]  MAIN_PAGE_NUMBER     Determines the main data page (@ref ANT_BSC_PAGE_0 or @ref ANT_BSC_PAGE_5 or @ref ANT_BSC_COMB_PAGE_0).
  * @param[in]  EVT_HANDLER          Event handler to be called for handling events in the BSC profile.
  */
-#define BSC_SENS_PROFILE_CONFIG_DEF(NAME,                               \
-                                    PAGE_1_PRESENT,                     \
-                                    PAGE_4_PRESENT,                     \
-                                    MAIN_PAGE_NUMBER,                   \
-                                    EVT_HANDLER)                        \
-static ant_bsc_sens_cb_t            NAME##_bsc_sens_cb;                 \
-static const ant_bsc_sens_config_t  NAME##_profile_bsc_sens_config =    \
-    {                                                                   \
-        .page_1_present     = (PAGE_1_PRESENT),                         \
-        .page_4_present     = (PAGE_4_PRESENT),                         \
-        .main_page_number   = (MAIN_PAGE_NUMBER),                       \
-        .p_cb               = &NAME##_bsc_sens_cb,                      \
-        .evt_handler        = (EVT_HANDLER),                            \
+#define BSC_SENS_PROFILE_CONFIG_DEF(NAME,                                       \
+                                    PAGE_1_PRESENT,                             \
+                                    PAGE_4_PRESENT,                             \
+                                    MAIN_PAGE_NUMBER,                           \
+                                    EVT_HANDLER)                                \
+static ant_bsc_sens_cb_t            CONCAT_2(NAME, _bsc_sens_cb);               \
+static const ant_bsc_sens_config_t  CONCAT_2(NAME, _profile_bsc_sens_config) =  \
+    {                                                                           \
+        .page_1_present     = (PAGE_1_PRESENT),                                 \
+        .page_4_present     = (PAGE_4_PRESENT),                                 \
+        .main_page_number   = (MAIN_PAGE_NUMBER),                               \
+        .p_cb               = &CONCAT_2(NAME, _bsc_sens_cb),                    \
+        .evt_handler        = (EVT_HANDLER),                                    \
     }
-#define BSC_SENS_PROFILE_CONFIG(NAME) &NAME##_profile_bsc_sens_config
+#define BSC_SENS_PROFILE_CONFIG(NAME) &CONCAT_2(NAME, _profile_bsc_sens_config)
+
 
 /**@brief BSC page number type. */
 typedef enum{
@@ -335,21 +335,19 @@ ret_code_t ant_bsc_sens_open(ant_bsc_profile_t * p_profile);
  *
  * @details This function handles all events from the ANT stack that are of interest to the Bicycle Speed and Cadence Sensor profile.
  *
- * @param[in]   p_profile       Pointer to the profile instance.
- * @param[in]   p_ant_event     Event received from the ANT stack.
+ * @param[in]   p_ant_evt     Event received from the ANT stack.
+ * @param[in]   p_context       Pointer to the profile instance.
  */
-void ant_bsc_sens_evt_handler(ant_bsc_profile_t * p_profile,
-                              ant_evt_t * p_ant_event);
+void ant_bsc_sens_evt_handler(ant_evt_t * p_ant_evt, void * p_context);
 
 /**@brief Function for handling the Display ANT events.
  *
  * @details This function handles all events from the ANT stack that are of interest to the Bicycle Speed and Cadence Display profile.
  *
- * @param[in]   p_profile       Pointer to the profile instance.
- * @param[in]   p_ant_event     Event received from the ANT stack.
+ * @param[in]   p_ant_evt     Event received from the ANT stack.
+ * @param[in]   p_context       Pointer to the profile instance.
  */
-void ant_bsc_disp_evt_handler(ant_bsc_profile_t * p_profile,
-                              ant_evt_t * p_ant_event);
+void ant_bsc_disp_evt_handler(ant_evt_t * p_ant_evt, void * p_context);
 
 
 #ifdef __cplusplus

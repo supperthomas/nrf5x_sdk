@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -85,7 +85,7 @@ extern "C" {
 #define BLE_UUID_BMS_SERVICE                                     0x181E     /**< BOND MANAGEMENT service UUID*/
 #define BLE_UUID_CGM_SERVICE                                     0x181F     /**< Continuous Glucose Monitoring service UUID*/
 #define BLE_UUID_PLX_SERVICE                                     0x1822     /**< Pulse Oximeter Service UUID*/
-
+#define BLE_UUID_OTS_SERVICE                                     0x1825     /**< Object Transfer Service UUID*/
 
 /** @} */
 
@@ -177,7 +177,18 @@ extern "C" {
 #define BLE_UUID_PLX_SPOT_CHECK_MEAS                             0x2A5E     /**< PLX Service, spot check measurement characteristic UUID*/
 #define BLE_UUID_PLX_CONTINUOUS_MEAS                             0x2A5F     /**< PLX Service, continuous measurement characteristic UUID*/
 #define BLE_UUID_PLX_FEATURES                                    0x2A60     /**< PLX Service, feature characteristic UUID*/
-
+#define BLE_UUID_OTS_FEATURES                                    0x2ABD     /**< OTS Service, feature characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_NAME                                 0x2ABE     /**< OTS Service, Object Name characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_TYPE                                 0x2ABF     /**< OTS Service, Object Type characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_SIZE                                 0x2AC0     /**< OTS Service, Object Size characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_FIRST_CREATED                        0x2AC1     /**< OTS Service, Object First Created characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_LAST_MODIFIED                        0x2AC2     /**< OTS Service, Object Last Modified characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_ID                                   0x2AC3     /**< OTS Service, Object ID characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_PROPERTIES                           0x2AC4     /**< OTS Service, Object Properties characteristic UUID*/
+#define BLE_UUID_OTS_OACP                                        0x2AC5     /**< OTS Service, Object Action Control Point characteristic UUID*/
+#define BLE_UUID_OTS_OLCP                                        0x2AC6     /**< OTS Service, Object List Control Point characteristic UUID*/
+#define BLE_UUID_OTS_LF                                          0x2AC7     /**< OTS Service, Object List Filter characteristic UUID*/
+#define BLE_UUID_OTS_OBJECT_CHANGED                              0x2AC8     /**< OTS Service, Object Changed characteristic UUID*/
 
 
 

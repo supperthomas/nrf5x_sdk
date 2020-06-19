@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,118 +35,53 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(BLE_BAS_C)
 #include "ble_bas_c.h"
-#include "ble_db_discovery.h"
 #include "ble_types.h"
-#include "ble_srv_common.h"
+#include "ble_db_discovery.h"
 #include "ble_gattc.h"
-#define NRF_LOG_MODULE_NAME "BLE_BAS_C"
+#define NRF_LOG_MODULE_NAME ble_bas_c
 #include "nrf_log.h"
-
-#define TX_BUFFER_MASK       0x07                  /**< TX Buffer mask, must be a mask of contiguous zeroes, followed by contiguous sequence of ones: 000...111. */
-#define TX_BUFFER_SIZE       (TX_BUFFER_MASK + 1)  /**< Size of the send buffer, which is 1 higher than the mask. */
-#define WRITE_MESSAGE_LENGTH BLE_CCCD_VALUE_LEN    /**< Length of the write message for CCCD. */
-
-typedef enum
-{
-    READ_REQ,      /**< Type identifying that this tx_message is a read request. */
-    WRITE_REQ      /**< Type identifying that this tx_message is a write request. */
-} tx_request_t;
-
-/**@brief Structure for writing a message to the peer, i.e. CCCD.
- */
-typedef struct
-{
-    uint8_t                  gattc_value[WRITE_MESSAGE_LENGTH];  /**< The message to write. */
-    ble_gattc_write_params_t gattc_params;                       /**< The GATTC parameters for this message. */
-} write_params_t;
-
-/**@brief Structure for holding the data that will be transmitted to the connected central.
- */
-typedef struct
-{
-    uint16_t     conn_handle;  /**< Connection handle to be used when transmitting this message. */
-    tx_request_t type;         /**< Type of message. (read or write). */
-    union
-    {
-        uint16_t       read_handle;  /**< Read request handle. */
-        write_params_t write_req;    /**< Write request message. */
-    } req;
-} tx_message_t;
+NRF_LOG_MODULE_REGISTER();
 
 
-static tx_message_t  m_tx_buffer[TX_BUFFER_SIZE];  /**< Transmit buffer for the messages that will be transmitted to the central. */
-static uint32_t      m_tx_insert_index = 0;        /**< Current index in the transmit buffer where the next message should be inserted. */
-static uint32_t      m_tx_index        = 0;        /**< Current index in the transmit buffer containing the next message to be transmitted. */
-
-/**@brief Function for passing any pending request from the buffer to the stack.
- */
-static void tx_buffer_process(void)
-{
-    if (m_tx_index != m_tx_insert_index)
-    {
-        uint32_t err_code;
-
-        if (m_tx_buffer[m_tx_index].type == READ_REQ)
-        {
-            err_code = sd_ble_gattc_read(m_tx_buffer[m_tx_index].conn_handle,
-                                         m_tx_buffer[m_tx_index].req.read_handle,
-                                         0);
-        }
-        else
-        {
-            err_code = sd_ble_gattc_write(m_tx_buffer[m_tx_index].conn_handle,
-                                          &m_tx_buffer[m_tx_index].req.write_req.gattc_params);
-        }
-        if (err_code == NRF_SUCCESS)
-        {
-            NRF_LOG_DEBUG("SD Read/Write API returns Success..\r\n");
-            m_tx_index++;
-            m_tx_index &= TX_BUFFER_MASK;
-        }
-        else
-        {
-            NRF_LOG_DEBUG("SD Read/Write API returns error. This message sending will be "
-                "attempted again..\r\n");
-        }
-    }
-}
-
-
-/**@brief Function for handling write response events.
+/**@brief Function for intercepting errors of GATTC and BLE GATT Queue.
  *
- * @param[in] p_bas_c   Pointer to the Battery Service Client Structure.
- * @param[in] p_ble_evt Pointer to the SoftDevice event.
+ * @param[in] nrf_error   Error code.
+ * @param[in] p_ctx       Parameter from the event handler.
+ * @param[in] conn_handle Connection handle.
  */
-static void on_write_rsp(ble_bas_c_t * p_bas_c, const ble_evt_t * p_ble_evt)
+static void gatt_error_handler(uint32_t   nrf_error,
+                               void     * p_ctx,
+                               uint16_t   conn_handle)
 {
-    // Check if the event if on the link for this instance
-    if (p_bas_c->conn_handle != p_ble_evt->evt.gattc_evt.conn_handle)
+    ble_bas_c_t * p_bas_c = (ble_bas_c_t *)p_ctx;
+
+    NRF_LOG_DEBUG("A GATT Client error has occurred on conn_handle: 0X%X", conn_handle);
+
+    if (p_bas_c->error_handler != NULL)
     {
-        return;
+        p_bas_c->error_handler(nrf_error);
     }
-    // Check if there is any message to be sent across to the peer and send it.
-    tx_buffer_process();
 }
 
 
 /**@brief     Function for handling read response events.
  *
- * @details   This function will validate the read response and raise the appropriate
+ * @details   This function validates the read response and raises the appropriate
  *            event to the application.
  *
  * @param[in] p_bas_c   Pointer to the Battery Service Client Structure.
  * @param[in] p_ble_evt Pointer to the SoftDevice event.
  */
-static void on_read_rsp(ble_bas_c_t * p_bas_c, const ble_evt_t * p_ble_evt)
+static void on_read_rsp(ble_bas_c_t * p_bas_c, ble_evt_t const * p_ble_evt)
 {
     const ble_gattc_evt_read_rsp_t * p_response;
 
-    // Check if the event if on the link for this instance
+    // Check if the event is on the link for this instance.
     if (p_bas_c->conn_handle != p_ble_evt->evt.gattc_evt.conn_handle)
     {
         return;
@@ -165,24 +100,22 @@ static void on_read_rsp(ble_bas_c_t * p_bas_c, const ble_evt_t * p_ble_evt)
 
         p_bas_c->evt_handler(p_bas_c, &evt);
     }
-    // Check if there is any buffered transmissions and send them.
-    tx_buffer_process();
 }
 
 
 /**@brief     Function for handling Handle Value Notification received from the SoftDevice.
  *
- * @details   This function will handle the Handle Value Notification received from the SoftDevice
- *            and checks if it is a notification of the Battery Level measurement from the peer. If
- *            so, this function will decode the battery level measurement and send it to the
+ * @details   This function handles the Handle Value Notification received from the SoftDevice
+ *            and checks whether it is a notification of the Battery Level measurement from the peer. If
+ *            it is, this function decodes the battery level measurement and sends it to the
  *            application.
  *
  * @param[in] p_ble_bas_c Pointer to the Battery Service Client structure.
  * @param[in] p_ble_evt   Pointer to the BLE event received.
  */
-static void on_hvx(ble_bas_c_t * p_ble_bas_c, const ble_evt_t * p_ble_evt)
+static void on_hvx(ble_bas_c_t * p_ble_bas_c, ble_evt_t const * p_ble_evt)
 {
-    // Check if the event if on the link for this instance
+    // Check if the event is on the link for this instance.
     if (p_ble_bas_c->conn_handle != p_ble_evt->evt.gattc_evt.conn_handle)
     {
         return;
@@ -233,9 +166,9 @@ void ble_bas_on_db_disc_evt(ble_bas_c_t * p_ble_bas_c, const ble_db_discovery_ev
             }
         }
 
-        NRF_LOG_DEBUG("Battery Service discovered at peer.\r\n");
+        NRF_LOG_DEBUG("Battery Service discovered at peer.");
 
-        //If the instance has been assigned prior to db_discovery, assign the db_handles
+        //If the instance has been assigned prior to db_discovery, assign the db_handles.
         if (p_ble_bas_c->conn_handle != BLE_CONN_HANDLE_INVALID)
         {
             if ((p_ble_bas_c->peer_bas_db.bl_cccd_handle == BLE_GATT_HANDLE_INVALID)&&
@@ -246,38 +179,45 @@ void ble_bas_on_db_disc_evt(ble_bas_c_t * p_ble_bas_c, const ble_db_discovery_ev
         }
         p_ble_bas_c->evt_handler(p_ble_bas_c, &evt);
     }
+    else if ((p_evt->evt_type == BLE_DB_DISCOVERY_SRV_NOT_FOUND) ||
+             (p_evt->evt_type == BLE_DB_DISCOVERY_ERROR))
+    {
+        NRF_LOG_DEBUG("Battery Service discovery failure at peer. ");
+    }
     else
     {
-        NRF_LOG_DEBUG("Battery Service discovery failure at peer. \r\n");
+        // Do nothing.
     }
 }
 
 
 /**@brief Function for creating a message for writing to the CCCD.
  */
-static uint32_t cccd_configure(uint16_t conn_handle, uint16_t handle_cccd, bool notification_enable)
+static uint32_t cccd_configure(ble_bas_c_t * p_ble_bas_c, bool notification_enable)
 {
-    NRF_LOG_DEBUG("Configuring CCCD. CCCD Handle = %d, Connection Handle = %d\r\n",
-                                                            handle_cccd,conn_handle);
+    NRF_LOG_DEBUG("Configuring CCCD. CCCD Handle = %d, Connection Handle = %d",
+                  p_ble_bas_c->peer_bas_db.bl_cccd_handle,
+                  p_ble_bas_c->conn_handle);
 
-    tx_message_t * p_msg;
-    uint16_t       cccd_val = notification_enable ? BLE_GATT_HVX_NOTIFICATION : 0;
+    nrf_ble_gq_req_t bas_c_req;
+    uint8_t          cccd[BLE_CCCD_VALUE_LEN];
+    uint16_t         cccd_val = notification_enable ? BLE_GATT_HVX_NOTIFICATION : 0;
 
-    p_msg              = &m_tx_buffer[m_tx_insert_index++];
-    m_tx_insert_index &= TX_BUFFER_MASK;
+    cccd[0] = LSB_16(cccd_val);
+    cccd[1] = MSB_16(cccd_val);
 
-    p_msg->req.write_req.gattc_params.handle   = handle_cccd;
-    p_msg->req.write_req.gattc_params.len      = WRITE_MESSAGE_LENGTH;
-    p_msg->req.write_req.gattc_params.p_value  = p_msg->req.write_req.gattc_value;
-    p_msg->req.write_req.gattc_params.offset   = 0;
-    p_msg->req.write_req.gattc_params.write_op = BLE_GATT_OP_WRITE_REQ;
-    p_msg->req.write_req.gattc_value[0]        = LSB_16(cccd_val);
-    p_msg->req.write_req.gattc_value[1]        = MSB_16(cccd_val);
-    p_msg->conn_handle                         = conn_handle;
-    p_msg->type                                = WRITE_REQ;
+    memset(&bas_c_req, 0, sizeof(bas_c_req));
+ 
+    bas_c_req.type                        = NRF_BLE_GQ_REQ_GATTC_WRITE;
+    bas_c_req.error_handler.cb            = gatt_error_handler;
+    bas_c_req.error_handler.p_ctx         = p_ble_bas_c;
+    bas_c_req.params.gattc_write.handle   = p_ble_bas_c->peer_bas_db.bl_cccd_handle;
+    bas_c_req.params.gattc_write.len      = BLE_CCCD_VALUE_LEN;
+    bas_c_req.params.gattc_write.p_value  = cccd;
+    bas_c_req.params.gattc_write.offset   = 0;
+    bas_c_req.params.gattc_write.write_op = BLE_GATT_OP_WRITE_REQ;
 
-    tx_buffer_process();
-    return NRF_SUCCESS;
+    return nrf_ble_gq_item_add(p_ble_bas_c->p_gatt_queue, &bas_c_req, p_ble_bas_c->conn_handle);
 }
 
 
@@ -295,16 +235,18 @@ uint32_t ble_bas_c_init(ble_bas_c_t * p_ble_bas_c, ble_bas_c_init_t * p_ble_bas_
     p_ble_bas_c->peer_bas_db.bl_cccd_handle = BLE_GATT_HANDLE_INVALID;
     p_ble_bas_c->peer_bas_db.bl_handle      = BLE_GATT_HANDLE_INVALID;
     p_ble_bas_c->evt_handler                = p_ble_bas_c_init->evt_handler;
+    p_ble_bas_c->error_handler              = p_ble_bas_c_init->error_handler;
+    p_ble_bas_c->p_gatt_queue               = p_ble_bas_c_init->p_gatt_queue;
 
     return ble_db_discovery_evt_register(&bas_uuid);
 }
 
 
-/**@brief     Function for handling Disconnected event received from the SoftDevice.
+/**@brief     Function for handling the Disconnected event received from the SoftDevice.
  *
- * @details   This function check if the disconnect event is happening on the link
- *            associated with the current instance of the module, if so it will set its
- *            conn_handle to invalid.
+ * @details   This function checks whether the disconnect event is happening on the link
+ *            associated with the current instance of the module. If the event is happening,
+ *            the function sets the instance's conn_handle to invalid.
  *
  * @param[in] p_ble_bas_c Pointer to the Battery Service Client structure.
  * @param[in] p_ble_evt   Pointer to the BLE event received.
@@ -320,21 +262,19 @@ static void on_disconnected(ble_bas_c_t * p_ble_bas_c, const ble_evt_t * p_ble_e
 }
 
 
-void ble_bas_c_on_ble_evt(ble_bas_c_t * p_ble_bas_c, const ble_evt_t * p_ble_evt)
+void ble_bas_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
-    if ((p_ble_bas_c == NULL) || (p_ble_evt == NULL))
+    if ((p_ble_evt == NULL) || (p_context == NULL))
     {
         return;
     }
+
+    ble_bas_c_t * p_ble_bas_c = (ble_bas_c_t *)p_context;
 
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GATTC_EVT_HVX:
             on_hvx(p_ble_bas_c, p_ble_evt);
-            break;
-
-        case BLE_GATTC_EVT_WRITE_RSP:
-            on_write_rsp(p_ble_bas_c, p_ble_evt);
             break;
 
         case BLE_GATTC_EVT_READ_RSP:
@@ -360,7 +300,7 @@ uint32_t ble_bas_c_bl_notif_enable(ble_bas_c_t * p_ble_bas_c)
         return NRF_ERROR_INVALID_STATE;
     }
 
-    return cccd_configure(p_ble_bas_c->conn_handle, p_ble_bas_c->peer_bas_db.bl_cccd_handle, true);
+    return cccd_configure(p_ble_bas_c, true);
 }
 
 
@@ -372,21 +312,19 @@ uint32_t ble_bas_c_bl_read(ble_bas_c_t * p_ble_bas_c)
         return NRF_ERROR_INVALID_STATE;
     }
 
-    tx_message_t * msg;
+    nrf_ble_gq_req_t bas_c_req;
 
-    msg                  = &m_tx_buffer[m_tx_insert_index++];
-    m_tx_insert_index   &= TX_BUFFER_MASK;
+    memset(&bas_c_req, 0, sizeof(bas_c_req));
+    bas_c_req.type                     = NRF_BLE_GQ_REQ_GATTC_READ;
+    bas_c_req.error_handler.cb         = gatt_error_handler;
+    bas_c_req.error_handler.p_ctx      = p_ble_bas_c;
+    bas_c_req.params.gattc_read.handle = p_ble_bas_c->peer_bas_db.bl_handle;
 
-    msg->req.read_handle = p_ble_bas_c->peer_bas_db.bl_handle;
-    msg->conn_handle     = p_ble_bas_c->conn_handle;
-    msg->type            = READ_REQ;
-
-    tx_buffer_process();
-    return NRF_SUCCESS;
+    return nrf_ble_gq_item_add(p_ble_bas_c->p_gatt_queue, &bas_c_req, p_ble_bas_c->conn_handle);
 }
 
 
-uint32_t ble_bas_c_handles_assign(ble_bas_c_t *    p_ble_bas_c,
+uint32_t ble_bas_c_handles_assign(ble_bas_c_t    * p_ble_bas_c,
                                   uint16_t         conn_handle,
                                   ble_bas_c_db_t * p_peer_handles)
 {
@@ -397,6 +335,7 @@ uint32_t ble_bas_c_handles_assign(ble_bas_c_t *    p_ble_bas_c,
     {
         p_ble_bas_c->peer_bas_db = *p_peer_handles;
     }
-    return NRF_SUCCESS;
+
+    return nrf_ble_gq_conn_handle_register(p_ble_bas_c->p_gatt_queue, conn_handle);
 }
 #endif // NRF_MODULE_ENABLED(BLE_BAS_C)

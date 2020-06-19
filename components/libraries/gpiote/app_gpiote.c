@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,12 +35,11 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(APP_GPIOTE)
 #include "app_gpiote.h"
-#include "nrf_drv_gpiote.h"
 #include "nrf_bitmask.h"
 #define MODULE_INITIALIZED (mp_users != NULL) /**< Macro designating whether the module has been initialized properly. */
 
@@ -130,15 +129,11 @@ uint32_t app_gpiote_user_register(app_gpiote_user_id_t     * p_user_id,
                                   app_gpiote_event_handler_t event_handler)
 {
     uint32_t user_pin_mask[GPIO_COUNT];
-    uint32_t ret_val = NRF_SUCCESS;
+    ASSERT(event_handler != NULL);
 
     // Check state and parameters.
     VERIFY_MODULE_INITIALIZED();
 
-    if (event_handler == NULL)
-    {
-        return NRF_ERROR_INVALID_PARAM;
-    }
     if (m_user_count >= m_user_array_size)
     {
         return NRF_ERROR_NO_MEM;
@@ -147,16 +142,18 @@ uint32_t app_gpiote_user_register(app_gpiote_user_id_t     * p_user_id,
     nrf_bitmask_masks_or(p_pins_low_to_high_mask, p_pins_high_to_low_mask,
                 user_pin_mask, sizeof(user_pin_mask));
     // Allocate new user.
-    memcpy(mp_users[m_user_count].pins_mask,
-            user_pin_mask, sizeof(mp_users[m_user_count].pins_mask));
-    memcpy(mp_users[m_user_count].pins_low_to_high_mask,
-            p_pins_low_to_high_mask, sizeof(mp_users[m_user_count].pins_low_to_high_mask));
-    memcpy(mp_users[m_user_count].pins_high_to_low_mask,
-            p_pins_high_to_low_mask, sizeof(mp_users[m_user_count].pins_high_to_low_mask));
-    mp_users[m_user_count].event_handler         = event_handler;
-    mp_users[m_user_count].enabled               = false;
+    mp_users[m_user_count].enabled       = false;
+    mp_users[m_user_count].event_handler = event_handler;
 
-    *p_user_id = m_user_count++;
+    memcpy(mp_users[m_user_count].pins_mask,
+          user_pin_mask,
+          sizeof(mp_users[m_user_count].pins_mask));
+    memcpy(mp_users[m_user_count].pins_low_to_high_mask,
+           p_pins_low_to_high_mask,
+           sizeof(mp_users[m_user_count].pins_low_to_high_mask));
+    memcpy(mp_users[m_user_count].pins_high_to_low_mask,
+           p_pins_high_to_low_mask,
+           sizeof(mp_users[m_user_count].pins_high_to_low_mask));
 
     uint32_t i;
     const nrf_drv_gpiote_in_config_t config = GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
@@ -167,12 +164,71 @@ uint32_t app_gpiote_user_register(app_gpiote_user_id_t     * p_user_id,
         if (nrf_bitmask_bit_is_set(i, user_pin_mask) &&
            !nrf_bitmask_bit_is_set(i, m_pins))
         {
-            ret_val = nrf_drv_gpiote_in_init(i, &config, gpiote_handler);
+            uint32_t ret_val = nrf_drv_gpiote_in_init(i, &config, gpiote_handler);
             VERIFY_SUCCESS(ret_val);
             nrf_bitmask_bit_set(i, m_pins);
         }
     }
-    return ret_val;
+
+    /* Success - return user id and increment counter */
+    *p_user_id = m_user_count++;
+    return NRF_SUCCESS;
+}
+
+uint32_t app_gpiote_user_register_ex(app_gpiote_user_id_t * p_user_id,
+                                     app_gpiote_user_pin_config_t const * p_pins_config,
+                                     size_t pin_count,
+                                     app_gpiote_event_handler_t event_handler)
+{
+    ASSERT(event_handler != NULL);
+
+    // Check state and parameters.
+    VERIFY_MODULE_INITIALIZED();
+    if (m_user_count >= m_user_array_size)
+    {
+        return NRF_ERROR_NO_MEM;
+    }
+    /* Prepare user structure */
+    gpiote_user_t * p_user = &mp_users[m_user_count];
+
+    p_user->enabled = false;
+    memset(p_user, 0, sizeof(gpiote_user_t));
+    mp_users[m_user_count].event_handler = event_handler;
+
+    for (; pin_count != 0; --pin_count, ++p_pins_config)
+    {
+        nrfx_gpiote_pin_t pin = (nrfx_gpiote_pin_t)p_pins_config->pin_number;
+        const nrf_drv_gpiote_in_config_t config = GPIOTE_RAW_CONFIG_IN_SENSE_TOGGLE(false);
+        if (!nrf_bitmask_bit_is_set(pin, m_pins))
+        {
+            uint32_t ret_val = nrf_drv_gpiote_in_init(pin, &config, gpiote_handler);
+            VERIFY_SUCCESS(ret_val);
+            nrf_bitmask_bit_set(pin, m_pins);
+        }
+
+        //lint -save -e650  Lint seems not properly support bitfields that uses enum as a base type
+        if ((p_pins_config->sense == NRF_GPIOTE_POLARITY_LOTOHI) ||
+            (p_pins_config->sense == NRF_GPIOTE_POLARITY_TOGGLE))
+        {
+            nrf_bitmask_bit_set(pin, p_user->pins_low_to_high_mask);
+        }
+        if ((p_pins_config->sense == NRF_GPIOTE_POLARITY_HITOLO) ||
+            (p_pins_config->sense == NRF_GPIOTE_POLARITY_TOGGLE))
+        {
+            nrf_bitmask_bit_set(pin, p_user->pins_high_to_low_mask);
+        }
+        //lint -restore
+    }
+    /* Mark all pins used by the selected user */
+    nrf_bitmask_masks_or(
+        p_user->pins_low_to_high_mask,
+        p_user->pins_high_to_low_mask,
+        p_user->pins_mask,
+        sizeof(p_user->pins_mask));
+    /* Success - return user id and increment counter */
+    *p_user_id = m_user_count++;
+
+    return NRF_SUCCESS;
 }
 
 __STATIC_INLINE uint32_t error_check(app_gpiote_user_id_t user_id)

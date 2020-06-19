@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Telit Communications Cyprus Ltd
- * 
+ * Copyright (c) 2016 - 2019, Telit Communications Cyprus Ltd
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 
 #ifndef NFC_T4T_LIB_H__
@@ -159,7 +159,11 @@ typedef enum
 {
     NFC_T4T_PARAM_TESTING,      ///< Internal usage only for Unit-Testing.
     NFC_T4T_PARAM_FWI,          ///< Frame Wait Time parameter
-    NFC_T4T_PARAM_SELRES        ///< Parameter for setting 'Protocol' bits for SEL_RES packet
+    NFC_T4T_PARAM_SELRES,       ///< Parameter for setting 'Protocol' bits for SEL_RES packet
+    NFC_T4T_PARAM_NFCID1,       /**< NFCID1 value, data can be 4, 7, or 10 bytes long (single, double, or triple size).
+                                     To use default NFCID1 of specific length pass one byte containing requested length.
+                                     Default 7-byte NFCID1 will be used if this parameter was not set. This parameter can be
+                                     set before nfc_t2t_setup() to set initial NFCID1 and it can be changed later. */
 } nfc_t4t_param_id_t;
 
 /** @brief Callback to pass events from NFCLib to application.

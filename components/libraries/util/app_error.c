@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -51,8 +51,7 @@
 #include "app_error.h"
 #include "nordic_common.h"
 #include "sdk_errors.h"
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
+
 /**@brief Function for error handling, which is called when an error has occurred.
  *
  * @warning This handler is an example only and does not fit a final product. You need to analyze
@@ -62,22 +61,6 @@
  * @param[in] line_num    Line number where the handler is called.
  * @param[in] p_file_name Pointer to the file name.
  */
-
-/*lint -save -e14 */
-void app_error_handler(ret_code_t error_code, uint32_t line_num, const uint8_t * p_file_name)
-{
-    error_info_t error_info =
-    {
-        .line_num    = line_num,
-        .p_file_name = p_file_name,
-        .err_code    = error_code,
-    };
-    app_error_fault_handler(NRF_FAULT_ID_SDK_ERROR, 0, (uint32_t)(&error_info));
-
-    UNUSED_VARIABLE(error_info);
-}
-
-/*lint -save -e14 */
 void app_error_handler_bare(ret_code_t error_code)
 {
     error_info_t error_info =
@@ -91,7 +74,6 @@ void app_error_handler_bare(ret_code_t error_code)
 
     UNUSED_VARIABLE(error_info);
 }
-
 
 void app_error_save_and_stop(uint32_t id, uint32_t pc, uint32_t info)
 {
@@ -141,5 +123,3 @@ void app_error_save_and_stop(uint32_t id, uint32_t pc, uint32_t info)
 
     __enable_irq();
 }
-
-/*lint -restore */

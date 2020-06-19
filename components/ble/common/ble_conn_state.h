@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
  * @file
@@ -52,16 +52,12 @@
  *          binary user states, or <i>user flags</i>. These are reset to 0 for new connections, but
  *          otherwise not touched by this module.
  *
- *          This module uses the @ref sdk_mapped_flags module, with connection handles as keys and
- *          the connection states as flags.
+ *          This module uses the @ref nrf_atomic module to make the flag operations thread-safe.
  *
  * @note A connection handle is not immediately invalidated when it is disconnected. Certain states,
  *       such as the role, can still be queried until the next time a new connection is established
  *       to any device.
  *
- *          To function properly, this module must be provided with BLE events from the SoftDevice
- *          through the @ref ble_conn_state_on_ble_evt() function. This module should be the first
- *          to receive BLE events if they are dispatched to multiple modules.
  */
 
 #ifndef BLE_CONN_STATE_H__
@@ -70,7 +66,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "ble.h"
-#include "sdk_mapped_flags.h"
+#include "ble_gap.h"
+#include "nrf_atomic.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,8 +82,17 @@ typedef enum
     BLE_CONN_STATUS_CONNECTED,     /**< The connection handle refers to an active connection. */
 } ble_conn_state_status_t;
 
-#define BLE_CONN_STATE_N_USER_FLAGS 24  /**< The number of available user flags. */
+#define BLE_CONN_STATE_MAX_CONNECTIONS  BLE_GAP_ROLE_COUNT_COMBINED_MAX  /**< The maximum number of connections supported. */
+#define BLE_CONN_STATE_USER_FLAG_COUNT  24                               /**< The number of available user flags. */
 
+
+/**@brief Type used to present a list of conn_handles.
+ */
+typedef struct
+{
+    uint32_t len;                                           /**< The length of the list. */
+    uint16_t conn_handles[BLE_CONN_STATE_MAX_CONNECTIONS];  /**< The list of handles. */
+} ble_conn_state_conn_handle_list_t;
 
 /**@brief One ID for each user flag collection.
  *
@@ -122,6 +128,15 @@ typedef enum
 } ble_conn_state_user_flag_id_t;
 
 
+/**@brief Function to be called when a flag ID is set. See @ref ble_conn_state_for_each_set_user_flag.
+ *
+ * @param[in]  conn_handle  The connection the flag is set for.
+ * @param[in]  p_context    Arbitrary pointer provided by the caller of
+ *                          @ref ble_conn_state_for_each_set_user_flag.
+ */
+typedef void (*ble_conn_state_user_function_t)(uint16_t conn_handle, void * p_context);
+
+
 /**
  * @defgroup ble_conn_state_functions BLE connection state functions
  * @{
@@ -133,13 +148,6 @@ typedef enum
  * @details This function sets all states to their default, removing all records of connection handles.
  */
 void ble_conn_state_init(void);
-
-
-/**@brief Function for providing BLE SoftDevice events to the connection state module.
- *
- * @param[in]  p_ble_evt    The SoftDevice event.
- */
-void ble_conn_state_on_ble_evt(ble_evt_t * p_ble_evt);
 
 
 /**@brief Function for querying whether a connection handle represents a valid connection.
@@ -198,11 +206,27 @@ bool ble_conn_state_encrypted(uint16_t conn_handle);
 bool ble_conn_state_mitm_protected(uint16_t conn_handle);
 
 
+/**@brief Function for querying whether a connection was bonded using LE Secure Connections (LESC).
+ *
+ * The connection must currently be encrypted.
+ *
+ * @note This function will report false if bonded, and the LESC bonding was unauthenticated
+ *       ("Just Works") and happened in a previous connection. To detect such cases as well, check
+ *       the stored bonding key, e.g. in Peer Manager, which has a LESC flag associated with it.
+ *
+ * @param[in]  conn_handle  Handle of connection to get the LESC state for.
+ *
+ * @retval true   If the connection was bonded using LESC.
+ * @retval false  If the connection has not been bonded using LESC, or conn_handle is invalid.
+ */
+bool ble_conn_state_lesc(uint16_t conn_handle);
+
+
 /**@brief Function for querying the total number of connections.
  *
  * @return  The total number of valid connections for which the module has a record.
  */
-uint32_t ble_conn_state_n_connections(void);
+uint32_t ble_conn_state_conn_count(void);
 
 
 /**@brief Function for querying the total number of connections in which the role of the local
@@ -211,7 +235,7 @@ uint32_t ble_conn_state_n_connections(void);
  * @return  The number of connections in which the role of the local device is
  *          @ref BLE_GAP_ROLE_CENTRAL.
  */
-uint32_t ble_conn_state_n_centrals(void);
+uint32_t ble_conn_state_central_conn_count(void);
 
 
 /**@brief Function for querying the total number of connections in which the role of the local
@@ -220,7 +244,7 @@ uint32_t ble_conn_state_n_centrals(void);
  * @return  The number of connections in which the role of the local device is
  *          @ref BLE_GAP_ROLE_PERIPH.
  */
-uint32_t ble_conn_state_n_peripherals(void);
+uint32_t ble_conn_state_peripheral_conn_count(void);
 
 
 /**@brief Function for obtaining a list of all connection handles for which the module has a record.
@@ -229,7 +253,7 @@ uint32_t ble_conn_state_n_peripherals(void);
  *
  * @return  A list of all valid connection handles for which the module has a record.
  */
-sdk_mapped_flags_key_list_t ble_conn_state_conn_handles(void);
+ble_conn_state_conn_handle_list_t ble_conn_state_conn_handles(void);
 
 
 /**@brief Function for obtaining a list of connection handles in which the role of the local
@@ -240,7 +264,7 @@ sdk_mapped_flags_key_list_t ble_conn_state_conn_handles(void);
  * @return  A list of all valid connection handles for which the module has a record and in which
  *          the role of local device is @ref BLE_GAP_ROLE_CENTRAL.
  */
-sdk_mapped_flags_key_list_t ble_conn_state_central_handles(void);
+ble_conn_state_conn_handle_list_t ble_conn_state_central_handles(void);
 
 
 /**@brief Function for obtaining the handle for the connection in which the role of the local device
@@ -251,7 +275,22 @@ sdk_mapped_flags_key_list_t ble_conn_state_central_handles(void);
  * @return  A list of all valid connection handles for which the module has a record and in which
  *          the role of local device is @ref BLE_GAP_ROLE_PERIPH.
  */
-sdk_mapped_flags_key_list_t ble_conn_state_periph_handles(void);
+ble_conn_state_conn_handle_list_t ble_conn_state_periph_handles(void);
+
+
+/**@brief Function for translating a connection handle to a value that can be used as an array index.
+ *
+ * @details Function for mapping connection handles onto the range <0 - MAX_CONNECTIONS>.
+ *
+ * @note The index will be the same as long as a connection is invalid. A subsequent connection with
+ *       the same connection handle might have a different index.
+ *
+ * @param[in]  conn_handle  The connection for which to retrieve an index.
+ *
+ * @return  An index unique to this connection. Or @ref BLE_CONN_STATE_MAX_CONNECTIONS if
+ *          @p conn_handle refers to an invalid connection.
+ */
+uint16_t ble_conn_state_conn_idx(uint16_t conn_handle);
 
 
 /**@brief Function for obtaining exclusive access to one of the user flag collections.
@@ -288,17 +327,28 @@ void ble_conn_state_user_flag_set(uint16_t                      conn_handle,
                                   bool                          value);
 
 
-/**@brief Function for getting the state of a user flag for all connection handles.
+/**@brief Function for running a function for each active connection.
  *
- * @details The returned collection can be used with the @ref sdk_mapped_flags API. The returned
- *          collection is a copy, so modifying it has no effect on the conn_state module.
+ * @param[in]  user_function  The function to run for each connection.
+ * @param[in]  p_context      Arbitrary context to be passed to \p user_function.
  *
- * @param[in]  flag_id  Which flag to get states for.
- *
- * @return  The collection of flag states. The collection is always all zeros when the flag_id is
- *          unregistered.
+ * @return  The number of times \p user_function was run.
  */
-sdk_mapped_flags_t ble_conn_state_user_flag_collection(ble_conn_state_user_flag_id_t flag_id);
+uint32_t ble_conn_state_for_each_connected(ble_conn_state_user_function_t user_function,
+                                           void                         * p_context);
+
+
+/**@brief Function for running a function for each flag that is set in a user flag collection.
+ *
+ * @param[in]  flag_id        Which flags to check.
+ * @param[in]  user_function  The function to run when a flag is set.
+ * @param[in]  p_context      Arbitrary context to be passed to \p user_function.
+ *
+ * @return  The number of times \p user_function was run.
+ */
+uint32_t ble_conn_state_for_each_set_user_flag(ble_conn_state_user_flag_id_t  flag_id,
+                                               ble_conn_state_user_function_t user_function,
+                                               void                         * p_context);
 
 /** @} */
 /** @} */

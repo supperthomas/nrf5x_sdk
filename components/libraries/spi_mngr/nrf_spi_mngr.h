@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2017 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2017 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef NRF_SPI_MNGR_H__
 #define NRF_SPI_MNGR_H__
@@ -48,6 +48,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/*lint -save -e491*/
+#ifndef NRF_SPI_MNGR_BUFFERS_IN_RAM
+  #define NRF_SPI_MNGR_BUFFERS_IN_RAM defined(SPIM_PRESENT)
+#endif
+
+#if NRF_SPI_MNGR_BUFFERS_IN_RAM
+  #define NRF_SPI_MNGR_BUFFER_LOC_IND
+#else
+  #define NRF_SPI_MNGR_BUFFER_LOC_IND const
+#endif
+/*lint -restore*/
 
 /**
  * @defgroup nrf_spi_mngr SPI transaction manager
@@ -147,12 +159,6 @@ typedef struct
 
     uint8_t volatile                            current_transfer_idx;
     ///< Index of currently performed transfer (within current transaction).
-
-    bool volatile                               internal_transaction_in_progress;
-    ///< Informs that an internal transaction is being performed (by nrf_spi_mngr_perform()).
-
-    uint8_t volatile                            internal_transaction_result;
-    ///< Used to pass the result of the internal transaction realized by nrf_spi_mngr_perform().
 } nrf_spi_mngr_cb_t;
 
 
@@ -259,6 +265,7 @@ ret_code_t nrf_spi_mngr_schedule(nrf_spi_mngr_t const *             p_nrf_spi_mn
  * and waits until it is finished.
  *
  * @param[in] p_nrf_spi_mngr        Pointer to the SPI transaction manager instance.
+ * @param[in] p_config              Required SPI configuration.
  * @param[in] p_transfers           Pointer to an array of transfers to be performed.
  * @param     number_of_transfers   Number of transfers to be performed.
  * @param     user_function         User-specified function to be called while
@@ -271,9 +278,10 @@ ret_code_t nrf_spi_mngr_schedule(nrf_spi_mngr_t const *             p_nrf_spi_mn
  *                                  with the error reported by @ref nrf_drv_spi_transfer().
  */
 ret_code_t nrf_spi_mngr_perform(nrf_spi_mngr_t const *          p_nrf_spi_mngr,
+                                nrf_drv_spi_config_t const *    p_config,
                                 nrf_spi_mngr_transfer_t const * p_transfers,
                                 uint8_t                         number_of_transfers,
-                                void (* user_function)(void));
+                                void                            (* user_function)(void));
 
 
 /**

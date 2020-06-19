@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(ANT_ENCRYPT_CONFIG)
@@ -149,7 +149,7 @@ ret_code_t ant_channel_encrypt_config(uint8_t                          channel_t
         // encryption of the stack should be initialized previously
         if (m_stack_encryption_configured == false)
         {
-            return NRF_ERROR_MODULE_NOT_INITIALZED;
+            return NRF_ERROR_MODULE_NOT_INITIALIZED;
         }
 
         switch (channel_type)
@@ -207,7 +207,11 @@ static void ant_encrypt_user_handler_try_to_run(uint8_t ant_channel, ant_encrypt
     }
 }
 
-void ant_encrypt_event_handler(ant_evt_t * p_ant_evt)
+/**@brief Function for handling an ANT stack event.
+ * @param[in] p_ant_evt  ANT stack event.
+ * @param[in] p_context  Context.
+ */
+static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 {
     uint8_t const ant_channel = p_ant_evt->channel;
 
@@ -230,6 +234,8 @@ void ant_encrypt_event_handler(ant_evt_t * p_ant_evt)
             break;
     }
 }
+
+NRF_SDH_ANT_OBSERVER(m_ant_observer, ANT_ENCRYPT_ANT_OBSERVER_PRIO, ant_evt_handler, NULL);
 
 void ant_enc_event_handler_register(ant_encryp_user_handler_t user_handler_func)
 {

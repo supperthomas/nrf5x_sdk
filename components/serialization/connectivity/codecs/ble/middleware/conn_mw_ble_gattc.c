@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble_gattc_conn.h"
 #include "conn_mw_ble_gattc.h"
@@ -48,9 +48,8 @@
 #if  defined(BLE_GATT_ATT_MTU_DEFAULT) && !defined(GATT_MTU_SIZE_DEFAULT)
 #define GATT_MTU_SIZE_DEFAULT BLE_GATT_ATT_MTU_DEFAULT
 #endif
-/** Maximum length of p_value in \ref ble_gattc_write_params_t. See Bluetooth 4.0 spec: 3.4.5.1 and
- *  3.4.5.3. */
-#define BLE_GATTC_WRITE_P_VALUE_LEN_MAX    (GATT_MTU_SIZE_DEFAULT - 3)
+
+#define BLE_GATTC_WRITE_P_VALUE_LEN_MAX    (247 - 3)
 
 /** See Bluetooth 4.0 spec: 3.4.4.7. */
 #define BLE_GATTC_HANDLE_COUNT_LEN_MAX     ((GATT_MTU_SIZE_DEFAULT - 1) / 2)

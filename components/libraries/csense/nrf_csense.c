@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 
@@ -43,6 +43,7 @@
 
 #include <string.h>
 
+#include <nrfx.h>
 #include "nrf_csense.h"
 #include "nrf_peripherals.h"
 #include "nrf_assert.h"
@@ -60,7 +61,7 @@ APP_TIMER_DEF(nrf_csense_timer);
 typedef struct
 {
     nrf_csense_event_handler_t  event_handler;                        //!< Event handler for module.
-    nrf_drv_state_t             state;                                //!< State of module.
+    nrfx_drv_state_t            state;                                //!< State of module.
     uint32_t                    ticks;                                //!< Timeout ticks of app_timer instance controlling csense module.
     uint16_t                    raw_analog_values[MAX_ANALOG_INPUTS]; //!< Raw values of measurements.
     uint8_t                     enabled_analog_channels_mask;         //!< Mask of enabled channels.
@@ -83,7 +84,7 @@ static uint16_t m_values_buffer[NRF_CSENSE_MAX_PADS_NUMBER];
  */
 static void csense_timer_handler(void * p_context)
 {
-    if (m_nrf_csense.state != NRF_DRV_STATE_POWERED_ON)
+    if (m_nrf_csense.state != NRFX_DRV_STATE_POWERED_ON)
     {
         return;
     }
@@ -441,7 +442,7 @@ ret_code_t nrf_csense_init(nrf_csense_event_handler_t event_handler,
                            uint32_t                   ticks)
 {
     ASSERT(event_handler != NULL);
-    ASSERT(m_nrf_csense.state == NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_nrf_csense.state == NRFX_DRV_STATE_UNINITIALIZED);
 
     ret_code_t err_code;
 
@@ -466,7 +467,7 @@ ret_code_t nrf_csense_init(nrf_csense_event_handler_t event_handler,
         return err_code;
     }
 
-    m_nrf_csense.state = NRF_DRV_STATE_INITIALIZED;
+    m_nrf_csense.state = NRFX_DRV_STATE_INITIALIZED;
 
     return NRF_SUCCESS;
 }
@@ -474,7 +475,7 @@ ret_code_t nrf_csense_init(nrf_csense_event_handler_t event_handler,
 
 ret_code_t nrf_csense_uninit(void)
 {
-    ASSERT(m_nrf_csense.state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_nrf_csense.state != NRFX_DRV_STATE_UNINITIALIZED);
 
     ret_code_t err_code;
     nrf_csense_instance_t ** pp_instance = &mp_nrf_csense_instance_head;
@@ -503,7 +504,7 @@ ret_code_t nrf_csense_uninit(void)
 
     memset((void *)&m_nrf_csense, 0, sizeof(nrf_csense_t));
 
-    m_nrf_csense.state = NRF_DRV_STATE_UNINITIALIZED;
+    m_nrf_csense.state = NRFX_DRV_STATE_UNINITIALIZED;
 
 
     return NRF_SUCCESS;
@@ -511,7 +512,7 @@ ret_code_t nrf_csense_uninit(void)
 
 ret_code_t nrf_csense_add(nrf_csense_instance_t * const p_instance)
 {
-    ASSERT(m_nrf_csense.state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_nrf_csense.state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_instance->p_next_instance == NULL);
     ASSERT(p_instance != NULL);
 
@@ -533,7 +534,7 @@ ret_code_t nrf_csense_add(nrf_csense_instance_t * const p_instance)
 
 ret_code_t nrf_csense_enable(nrf_csense_instance_t * const p_instance)
 {
-    ASSERT(m_nrf_csense.state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_nrf_csense.state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_instance != NULL);
 
     ret_code_t               err_code;
@@ -563,7 +564,7 @@ ret_code_t nrf_csense_enable(nrf_csense_instance_t * const p_instance)
         }
     }
 
-    m_nrf_csense.state = NRF_DRV_STATE_POWERED_ON;
+    m_nrf_csense.state = NRFX_DRV_STATE_POWERED_ON;
     nrf_drv_csense_channels_enable(analog_channels_mask);
 
     return NRF_SUCCESS;
@@ -572,7 +573,7 @@ ret_code_t nrf_csense_enable(nrf_csense_instance_t * const p_instance)
 
 ret_code_t nrf_csense_disable(nrf_csense_instance_t * const p_instance)
 {
-    ASSERT(m_nrf_csense.state == NRF_DRV_STATE_POWERED_ON);
+    ASSERT(m_nrf_csense.state == NRFX_DRV_STATE_POWERED_ON);
 
     ret_code_t               err_code;
     nrf_csense_instance_t  * p_instance_temp = mp_nrf_csense_instance_head;
@@ -608,7 +609,7 @@ ret_code_t nrf_csense_disable(nrf_csense_instance_t * const p_instance)
         {
             return err_code;
         }
-        m_nrf_csense.state = NRF_DRV_STATE_INITIALIZED;
+        m_nrf_csense.state = NRFX_DRV_STATE_INITIALIZED;
     }
 
     return NRF_SUCCESS;
@@ -617,7 +618,7 @@ ret_code_t nrf_csense_disable(nrf_csense_instance_t * const p_instance)
 
 ret_code_t nrf_csense_ticks_set(uint32_t ticks)
 {
-    ASSERT(m_nrf_csense.state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_nrf_csense.state != NRFX_DRV_STATE_UNINITIALIZED);
 
     ret_code_t err_code;
 
@@ -628,7 +629,7 @@ ret_code_t nrf_csense_ticks_set(uint32_t ticks)
 
     m_nrf_csense.ticks = ticks;
 
-    if (m_nrf_csense.state == NRF_DRV_STATE_POWERED_ON)
+    if (m_nrf_csense.state == NRFX_DRV_STATE_POWERED_ON)
     {
         err_code = app_timer_stop(nrf_csense_timer);
         if (err_code != NRF_SUCCESS)

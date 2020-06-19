@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -70,6 +70,11 @@
 #include "app_error.h"
 #include "app_util.h"
 #include "compiler_abstraction.h"
+#include "nordic_common.h"
+#ifdef APP_TIMER_V2
+#include "nrf_log_instance.h"
+#include "nrf_sortlist.h"
+#endif
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -78,18 +83,22 @@
 extern "C" {
 #endif
 
-#define APP_TIMER_CLOCK_FREQ            200                     /**< Clock frequency of the RTC timer used to implement the app timer module. */
-#define APP_TIMER_MIN_TIMEOUT_TICKS     1                         /**< Minimum value of the timeout_ticks parameter of app_timer_start(). */
+/** @brief Name of the module used for logger messaging.
+ */
+#define APP_TIMER_LOG_NAME app_timer
+
+#define APP_TIMER_CLOCK_FREQ            32768                     /**< Clock frequency of the RTC timer used to implement the app timer module. */
+#define APP_TIMER_MIN_TIMEOUT_TICKS     5                         /**< Minimum value of the timeout_ticks parameter of app_timer_start(). */
 
 #ifdef RTX
 #define APP_TIMER_NODE_SIZE             40                        /**< Size of app_timer.timer_node_t (used to allocate data). */
-#elif defined(RTTHREAD)
-#define APP_TIMER_NODE_SIZE             12
 #else
 #define APP_TIMER_NODE_SIZE             32                        /**< Size of app_timer.timer_node_t (used to allocate data). */
 #endif // RTX
 
 #define APP_TIMER_SCHED_EVENT_DATA_SIZE sizeof(app_timer_event_t) /**< Size of event data when scheduler is used. */
+
+#define APP_TIMER_MAX_CNT_VAL          RTC_COUNTER_COUNTER_Msk    /**< Maximum counter value that can be returned by @ref app_timer_cnt_get. */
 
 /**@brief Convert milliseconds to timer ticks.
  *
@@ -101,36 +110,71 @@ extern "C" {
  * @return     Number of timer ticks.
  */
 #ifndef FREERTOS
-#ifndef RTTHREAD
 #define APP_TIMER_TICKS(MS)                                \
             ((uint32_t)ROUNDED_DIV(                        \
             (MS) * (uint64_t)APP_TIMER_CLOCK_FREQ,         \
             1000 * (APP_TIMER_CONFIG_RTC_FREQUENCY + 1)))
 #else
-#define APP_TIMER_TICKS(MS)     rt_tick_from_millisecond(MS)
-#endif
-#else
 #include "FreeRTOSConfig.h"
 #define APP_TIMER_TICKS(MS) (uint32_t)ROUNDED_DIV((MS)*configTICK_RATE_HZ,1000)
 #endif
-typedef struct app_timer_t { uint32_t data[CEIL_DIV(APP_TIMER_NODE_SIZE, sizeof(uint32_t))]; } app_timer_t;
 
-/**@brief Timer ID type.
- * Never declare a variable of this type, but use the macro @ref APP_TIMER_DEF instead.*/
-typedef app_timer_t * app_timer_id_t;
 
 /**
  * @brief Create a timer identifier and statically allocate memory for the timer.
  *
  * @param timer_id Name of the timer identifier variable that will be used to control the timer.
  */
-#define APP_TIMER_DEF(timer_id)                                    \
-    static app_timer_t timer_id##_data = { {0} };                  \
-    static const app_timer_id_t timer_id = &timer_id##_data
-
+#define APP_TIMER_DEF(timer_id) _APP_TIMER_DEF(timer_id)
 
 /**@brief Application time-out handler type. */
 typedef void (*app_timer_timeout_handler_t)(void * p_context);
+
+#ifdef APP_TIMER_V2
+/**
+ * @brief app_timer control block
+ */
+typedef struct
+{
+    nrf_sortlist_item_t         list_item;     /**< Token used by sortlist. */
+    uint64_t                    end_val;       /**< RTC counter value when timer expires. */
+    uint32_t                    repeat_period; /**< Repeat period (0 if single shot mode). */
+    app_timer_timeout_handler_t handler;       /**< User handler. */
+    void *                      p_context;     /**< User context. */
+    NRF_LOG_INSTANCE_PTR_DECLARE(p_log)        /**< Pointer to instance of the logger object (Conditionally compiled). */
+    volatile bool               active;        /**< Flag indicating that timer is active. */
+} app_timer_t;
+
+/**@brief Timer ID type.
+ * Never declare a variable of this type, but use the macro @ref APP_TIMER_DEF instead.*/
+typedef app_timer_t * app_timer_id_t;
+
+#define _APP_TIMER_DEF(timer_id)                                                              \
+    NRF_LOG_INSTANCE_REGISTER(APP_TIMER_LOG_NAME, timer_id,                                   \
+                              APP_TIMER_CONFIG_INFO_COLOR,                                    \
+                              APP_TIMER_CONFIG_DEBUG_COLOR,                                   \
+                              APP_TIMER_CONFIG_INITIAL_LOG_LEVEL,                             \
+                              APP_TIMER_CONFIG_LOG_ENABLED ?                                  \
+                                         APP_TIMER_CONFIG_LOG_LEVEL : NRF_LOG_SEVERITY_NONE); \
+    static app_timer_t CONCAT_2(timer_id,_data) = {                                           \
+            .active = false,                                                                  \
+            NRF_LOG_INSTANCE_PTR_INIT(p_log, APP_TIMER_LOG_NAME, timer_id)                    \
+    };                                                                                        \
+    static const app_timer_id_t timer_id = &CONCAT_2(timer_id,_data)
+
+#else //APP_TIMER_V2
+typedef struct app_timer_t { uint32_t data[CEIL_DIV(APP_TIMER_NODE_SIZE, sizeof(uint32_t))]; } app_timer_t;
+
+/**@brief Timer ID type.
+ * Never declare a variable of this type, but use the macro @ref APP_TIMER_DEF instead.*/
+typedef app_timer_t * app_timer_id_t;
+
+#define _APP_TIMER_DEF(timer_id)                                      \
+    static app_timer_t CONCAT_2(timer_id,_data) = { {0} };           \
+    static const app_timer_id_t timer_id = &CONCAT_2(timer_id,_data)
+
+#endif
+
 
 /**@brief Structure passed to app_scheduler. */
 typedef struct

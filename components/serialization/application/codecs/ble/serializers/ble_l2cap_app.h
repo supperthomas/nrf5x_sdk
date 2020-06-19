@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**@file
  *
@@ -63,7 +63,7 @@ extern "C" {
  *
  * @details This registers a higher protocol layer with the L2CAP multiplexer, and is required prior to all operations on the CID.
  *
- * @param[in]     cid 			 L2CAP CID.
+ * @param[in]     cid            L2CAP CID.
  * @param[in]     p_buf          Pointer to beginning of command response packet.
  * @param[in,out] p_buf_len      \c in: Size of \p p_buf buffer.
  *                               \c out: Length of encoded command packet.
@@ -137,12 +137,12 @@ uint32_t ble_l2cap_cid_unregister_rsp_dec(uint8_t const * const p_buf,
  *          generate a @ref BLE_EVT_TX_COMPLETE event when the packet has been transmitted.
  *          See the documentation of @ref sd_ble_tx_packet_count_get for more details.
  *
- * @param[in]     conn_handle 		Connection handle.
+ * @param[in]     conn_handle       Connection handle.
  * @param[in]     p_l2cap_header    Pointer to a packet header containing length and CID.
- * @param[in]     p_data      		Pointer to the data to be transmitted.
- * @param[in]     p_buf         	Pointer to beginning of command response packet.
- * @param[in,out] p_buf_len 		\c in: Size of \p p_buf buffer.
- *                           		\c out: Length of encoded command packet.
+ * @param[in]     p_data            Pointer to the data to be transmitted.
+ * @param[in]     p_buf             Pointer to beginning of command response packet.
+ * @param[in,out] p_buf_len\        c in: Size of \p p_buf buffer.
+ *                                  \c out: Length of encoded command packet.
  *
  * @retval NRF_SUCCESS Successfully queued an L2CAP packet for transmission.
  * @retval NRF_ERROR_INVALID_ADDR Invalid pointer supplied.
@@ -177,6 +177,59 @@ uint32_t ble_l2cap_tx_rsp_dec(uint8_t const * const p_buf,
                               uint32_t * const      p_result_code);
 #endif
 
+#if NRF_SD_BLE_API_VERSION >= 5
+uint32_t ble_l2cap_ch_setup_req_enc(uint16_t conn_handle,
+                                    uint16_t * p_local_cid,
+                                    ble_l2cap_ch_setup_params_t const *p_params,
+                                    uint8_t * const  p_buf,
+                                    uint32_t * const p_buf_len);
+
+uint32_t ble_l2cap_ch_setup_rsp_dec(uint8_t const * const p_buf,
+                                    uint32_t              packet_len,
+                                    uint16_t *            p_local_cid,
+                                    uint32_t * const      p_result_code);
+
+uint32_t ble_l2cap_ch_release_req_enc(uint16_t conn_handle,
+                                      uint16_t local_cid,
+                                      uint8_t * const  p_buf,
+                                      uint32_t * const p_buf_len);
+
+uint32_t ble_l2cap_ch_release_rsp_dec(uint8_t const * const p_buf,
+                                     uint32_t              packet_len,
+                                     uint32_t * const      p_result_code);
+
+uint32_t ble_l2cap_ch_rx_req_enc(uint16_t conn_handle,
+                                 uint16_t local_cid,
+                                 ble_data_t const *p_sdu_buf,
+                                 uint8_t * const  p_buf,
+                                 uint32_t * const p_buf_len);
+
+uint32_t ble_l2cap_ch_rx_rsp_dec(uint8_t const * const p_buf,
+                                 uint32_t              packet_len,
+                                 uint32_t * const      p_result_code);
+
+uint32_t ble_l2cap_ch_tx_req_enc(uint16_t conn_handle,
+                                 uint16_t local_cid,
+                                 ble_data_t const *p_sdu_buf,
+                                 uint8_t * const  p_buf,
+                                 uint32_t * const p_buf_len);
+
+uint32_t ble_l2cap_ch_tx_rsp_dec(uint8_t const * const p_buf,
+                                 uint32_t              packet_len,
+                                 uint32_t * const      p_result_code);
+
+uint32_t ble_l2cap_ch_flow_control_req_enc(uint16_t conn_handle,
+                                 uint16_t local_cid,
+                                 uint16_t credits,
+                                 uint16_t *p_credits,
+                                 uint8_t * const  p_buf,
+                                 uint32_t * const p_buf_len);
+
+uint32_t ble_l2cap_ch_flow_control_rsp_dec(uint8_t const * const p_buf,
+                                 uint32_t              packet_len,
+                                 uint16_t *            p_credits,
+                                 uint32_t * const      p_result_code);
+#endif //NRF_SD_BLE_API_VERSION >= 5
 
 #ifdef __cplusplus
 }

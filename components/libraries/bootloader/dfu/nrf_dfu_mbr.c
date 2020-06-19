@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,12 +35,15 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "nrf_dfu_mbr.h"
 #include "nrf_mbr.h"
 #include "nrf_dfu_types.h"
 #include "nrf_log.h"
+#include "nrf_bootloader_info.h"
+
+#define MBR_IRQ_FORWARD_ADDRESS_ADDRESS (0x20000000) //!< The address of the variable that decides where the MBR forwards interrupts
 
 uint32_t nrf_dfu_mbr_copy_bl(uint32_t * p_src, uint32_t len)
 {
@@ -52,28 +55,6 @@ uint32_t nrf_dfu_mbr_copy_bl(uint32_t * p_src, uint32_t len)
         .command = SD_MBR_COMMAND_COPY_BL,
         .params.copy_bl.bl_src = p_src,
         .params.copy_bl.bl_len = len_words
-    };
-
-    ret_val = sd_mbr_command(&command);
-
-    return ret_val;
-}
-
-
-uint32_t nrf_dfu_mbr_copy_sd(uint32_t * p_dst, uint32_t * p_src, uint32_t len)
-{
-    uint32_t ret_val;
-    uint32_t const len_words = len / sizeof(uint32_t);
-
-    if((len_words & (CODE_PAGE_SIZE / sizeof(uint32_t) - 1)) != 0)
-        return NRF_ERROR_INVALID_LENGTH;
-
-    sd_mbr_command_t command =
-    {
-        .command = SD_MBR_COMMAND_COPY_SD,
-        .params.copy_sd.src = p_src,
-        .params.copy_sd.dst = p_dst,
-        .params.copy_sd.len = len_words
     };
 
     ret_val = sd_mbr_command(&command);
@@ -97,41 +78,28 @@ uint32_t nrf_dfu_mbr_init_sd(void)
 }
 
 
-uint32_t nrf_dfu_mbr_compare(uint32_t * p_ptr1, uint32_t * p_ptr2, uint32_t len)
+uint32_t nrf_dfu_mbr_irq_forward_address_set(void)
 {
-    uint32_t ret_val;
-    uint32_t const len_words = len / sizeof(uint32_t);
+    uint32_t ret_val = NRF_ERROR_INVALID_PARAM;
+    uint32_t address = MBR_SIZE;
 
+#if !defined(BLE_STACK_SUPPORT_REQD) && !defined(ANT_STACK_SUPPORT_REQD)
     sd_mbr_command_t command =
     {
-        .command = SD_MBR_COMMAND_COMPARE,
-        .params.compare.ptr1 = p_ptr1,
-        .params.compare.ptr2 = p_ptr2,
-        .params.compare.len = len_words
+        .command = SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
+        .params.irq_forward_address_set.address = address,
     };
 
     ret_val = sd_mbr_command(&command);
-
-    return ret_val;
-}
-
-
-uint32_t nrf_dfu_mbr_vector_table_set(uint32_t address, uint8_t is_temporary)
-{
-    uint32_t ret_val;
-
-    NRF_LOG_DEBUG("running vector table set\r\n");
-    sd_mbr_command_t command =
-    {
-        .command = SD_MBR_COMMAND_VECTOR_TABLE_BASE_SET,
-        .params.base_set.address = address,
-#ifndef SOFTDEVICE_PRESENT
-        .params.base_set.temporary = is_temporary,
 #endif
-    };
 
-    ret_val = sd_mbr_command(&command);
-    NRF_LOG_DEBUG("After running vector table set\r\n");
+    if (ret_val == NRF_ERROR_INVALID_PARAM)
+    {
+        // Manually set the forward address if this MBR doesn't have the command.
+        *(uint32_t *)(MBR_IRQ_FORWARD_ADDRESS_ADDRESS) = address;
+
+        ret_val = NRF_SUCCESS;
+    }
 
     return ret_val;
 }

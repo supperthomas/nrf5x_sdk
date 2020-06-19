@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef NFC_BLE_PAIR_LIB_H__
 #define NFC_BLE_PAIR_LIB_H__
@@ -43,6 +43,8 @@
 #include <stdbool.h>
 #include "sdk_errors.h"
 #include "ble.h"
+#include "ble_advertising.h"
+#include "peer_manager.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,45 +54,46 @@ extern "C" {
  *
  * @addtogroup nfc_api
  *
- * @defgroup nfc_ble_pair_lib NFC BLE Pairing Lib
+ * @defgroup nfc_ble_pair_lib NFC BLE Pairing Library
  * @ingroup  nfc_api
- * @brief    @tagAPI52 High level library for BLE Connection Handover pairing using NFC.
+ * @brief    @tagAPI52 High-level library for BLE Connection Handover pairing using NFC.
  * @{
  */
 
 /**
- * @brief NFC pairing types
+ * @brief NFC pairing types.
  */
-typedef enum {
-    NFC_PAIRING_MODE_JUST_WORKS,        /**< Legacy Just Works pairing without security key */
-    NFC_PAIRING_MODE_OOB,               /**< Legacy OOB pairing with Temporary Key shared through NFC tag data */
-    NFC_PAIRING_MODE_LESC_JUST_WORKS,   /**< LESC pairing without authentication data */
-    NFC_PAIRING_MODE_LESC_OOB,          /**< LESC pairing with OOB authentication data */
-    NFC_PAIRING_MODE_CNT                /**< Number of available pairing modes */
+typedef enum
+{
+    NFC_PAIRING_MODE_JUST_WORKS,        /**< Legacy Just Works pairing without a security key. */
+    NFC_PAIRING_MODE_OOB,               /**< Legacy OOB pairing with a Temporary Key shared through NFC tag data. */
+    NFC_PAIRING_MODE_LESC_JUST_WORKS,   /**< LESC pairing without authentication data. */
+    NFC_PAIRING_MODE_LESC_OOB,          /**< LESC pairing with OOB authentication data. */
+    NFC_PAIRING_MODE_GENERIC_OOB,       /**< OOB pairing with fallback from LESC to Legacy mode. */
+    NFC_PAIRING_MODE_CNT                /**< Number of available pairing modes. */
 } nfc_pairing_mode_t;
 
 /**
- * @brief Initializes NFC tag data and turns on tag emulation.
+ * @brief Funtion for initializing NFC tag data and turning on tag emulation.
  *
  * @warning It is assumed that Peer Manager has already been initialized before calling this function.
  *          It is also assumed that BLE advertising has already been initialized and it is configured
  *          to run in the BLE_ADV_MODE_FAST mode.
  *
- * @note    This library also controls BLE advertising, so @ref ble_advertising_on_ble_evt should not
- *          be called on BLE events.
- *
- * @param[in] mode                  Pairing mode, this is value of the @ref nfc_pairing_mode_t enum.
+ * @param[in] mode                  Pairing mode, this is the value of the @ref nfc_pairing_mode_t enum.
+ * @param[in] p_advertising         Pointer to the advertising module instance.
  *
  * @retval NRF_SUCCESS              If NFC has been initialized properly.
  * @retval NRF_ERROR_INVALID_PARAM  If pairing mode is invalid.
+ * @retval NRF_ERROR_NULL           If pointer to the advertising module instance is NULL.
  * @retval Other                    Other error codes might be returned depending on used modules.
  */
-ret_code_t nfc_ble_pair_init(nfc_pairing_mode_t mode);
+ret_code_t nfc_ble_pair_init(ble_advertising_t * const p_advertising, nfc_pairing_mode_t mode);
 
 /**
- * @brief Sets pairing data and BLE security mode.
+ * @brief Function for setting pairing data and BLE security mode.
  *
- * @param[in] mode                  New pairing mode, this is value of the @ref nfc_pairing_mode_t enum.
+ * @param[in] mode                  New pairing mode, this is the value of the @ref nfc_pairing_mode_t enum.
  *
  * @retval NRF_SUCCESS              If new pairing mode has been set correctly.
  * @retval NRF_ERROR_INVALID_PARAM  If pairing mode is invalid.
@@ -99,25 +102,31 @@ ret_code_t nfc_ble_pair_init(nfc_pairing_mode_t mode);
 ret_code_t nfc_ble_pair_mode_set(nfc_pairing_mode_t mode);
 
 /**
- * @brief Funtion to obtain current pairing mode.
+ * @brief Function for obtaining the current pairing mode.
  *
  * @return Current pairing mode.
  */
 nfc_pairing_mode_t nfc_ble_pair_mode_get(void);
 
 /**
- * @brief NFC pairing BLE events handler
+ * @brief Function for replying to @ref PM_EVT_CONN_SEC_PARAMS_REQ.
  *
- * @details Handles BLE authorization events, replying with OOB data.
+ * @details This function is used to allow dynamic changes in the Peer Manager
+ *          security parameters depending on security parameters
+ *          obtained from the peer. This is essential for dynamic switching
+ *          between Legacy OOB and LESC OOB pairing modes when pairing
+ *          library works in @ref NFC_PAIRING_MODE_GENERIC_OOB mode.
  *
- * @note    This function should be called inside BLE event dispatcher as it response to the
- *          @ref BLE_GAP_EVT_AUTH_KEY_REQUEST and @ref BLE_GAP_EVT_LESC_DHKEY_REQUEST events.
- *          It also manages BLE advertising module based on @ref BLE_GAP_EVT_CONNECTED and
- *          @ref BLE_GAP_EVT_DISCONNECTED events.
+ * @note This function invokes the @ref pm_conn_sec_params_reply function.
  *
- * @param[in] p_ble_evt Bluetooth stack event.
+ * @param[in] p_evt       Pointer to the Peer Manager event struct with
+ *                        information about peer security parameters.
+ *
+ * @retval NRF_SUCCESS    If proper reply has been sent or library does not need to reply.
+ * @retval NRF_ERROR_NULL If pointer to the Peer Manager event is NULL.
+ * @retval Other          Other error codes might be returned by the @ref pm_conn_sec_params_reply function.
  */
-void on_nfc_ble_pair_evt(const ble_evt_t * const p_ble_evt);
+ret_code_t nfc_ble_pair_on_pm_params_req(pm_evt_t const * p_evt);
 
 /** @} */
 

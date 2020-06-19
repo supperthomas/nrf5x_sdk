@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include <stdlib.h>
 #include <string.h>
@@ -46,6 +46,7 @@
 #include "ble_gatt_struct_serialization.h"
 #include "ble_gattc_struct_serialization.h"
 #include "ble_gatts_struct_serialization.h"
+#include "ble_l2cap_struct_serialization.h"
 #include "cond_field_serialization.h"
 #include "app_util.h"
 
@@ -138,25 +139,30 @@ uint32_t ble_opt_get_rsp_dec(uint8_t const * const p_buf,
             p_struct   = &(p_opt->gap_opt.ext_len);
         break;
 #endif
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 6
         case BLE_GAP_OPT_SCAN_REQ_REPORT:
             fp_decoder = ble_gap_opt_scan_req_report_t_dec;
             p_struct   = &(p_opt->gap_opt.scan_req_report);
         break;
+#endif
 #if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 4
         case BLE_GAP_OPT_COMPAT_MODE:
             fp_decoder = ble_gap_opt_compat_mode_t_dec;
             p_struct   = &(p_opt->gap_opt.compat_mode);
         break;
 #else
+#ifndef S112
         case BLE_GAP_OPT_COMPAT_MODE_1:
             fp_decoder = ble_gap_opt_compat_mode_1_t_dec;
             p_struct   = &(p_opt->gap_opt.compat_mode_1);
         break;
+#endif
+#endif
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION == 4
         case BLE_GAP_OPT_COMPAT_MODE_2:
             fp_decoder = ble_gap_opt_compat_mode_2_t_dec;
             p_struct   = &(p_opt->gap_opt.compat_mode_2);
         break;
-
 #endif
         default:
             SER_ASSERT(NRF_ERROR_INVALID_PARAM, NRF_ERROR_INVALID_PARAM);
@@ -185,7 +191,7 @@ uint32_t ble_opt_set_req_enc(uint32_t const          opt_id,
     SER_PUSH_COND(p_opt, NULL);
     if (p_opt)
     {
-        switch(opt_id)
+        switch (opt_id)
         {
 #if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 4
             case BLE_COMMON_OPT_CONN_BW:
@@ -223,27 +229,33 @@ uint32_t ble_opt_set_req_enc(uint32_t const          opt_id,
                 p_struct   = &(p_opt->gap_opt.ext_len);
             break;
 #endif
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 6
             case BLE_GAP_OPT_SCAN_REQ_REPORT:
                 fp_encoder = ble_gap_opt_scan_req_report_t_enc;
                 p_struct   = &(p_opt->gap_opt.scan_req_report);
             break;
+#endif
 #if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 4
             case BLE_GAP_OPT_COMPAT_MODE:
                 fp_encoder = ble_gap_opt_compat_mode_t_enc;
                 p_struct   = &(p_opt->gap_opt.compat_mode);
             break;
 #else
+#ifndef S112
             case BLE_GAP_OPT_COMPAT_MODE_1:
                 fp_encoder = ble_gap_opt_compat_mode_1_t_enc;
                 p_struct   = &(p_opt->gap_opt.compat_mode_1);
             break;
-            case BLE_GAP_OPT_COMPAT_MODE_2:
-                fp_encoder = ble_gap_opt_compat_mode_2_t_enc;
-                p_struct   = &(p_opt->gap_opt.compat_mode_2);
-            break;
+#endif
             case BLE_GAP_OPT_SLAVE_LATENCY_DISABLE:
                 fp_encoder = ble_gap_opt_slave_latency_disable_t_enc;
                 p_struct   = &(p_opt->gap_opt.slave_latency_disable);
+            break;
+#endif
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION == 4
+            case BLE_GAP_OPT_COMPAT_MODE_2:
+                fp_encoder = ble_gap_opt_compat_mode_2_t_enc;
+                p_struct   = &(p_opt->gap_opt.compat_mode_2);
             break;
 #endif
             default:
@@ -437,7 +449,7 @@ uint32_t ble_cfg_set_req_enc(uint32_t              cfg_id,
     if (p_cfg)
     {
 
-        switch(cfg_id)
+        switch (cfg_id)
         {
             case BLE_CONN_CFG_GAP:
                 fp_encoder = ble_gap_conn_cfg_t_enc;
@@ -455,6 +467,12 @@ uint32_t ble_cfg_set_req_enc(uint32_t              cfg_id,
                 fp_encoder = ble_gatt_conn_cfg_t_enc;
                 p_struct   = &(p_cfg->conn_cfg.params.gatt_conn_cfg);
                 break;
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION >= 5 && !defined(S112)
+            case BLE_CONN_CFG_L2CAP:
+                fp_encoder = ble_l2cap_conn_cfg_t_enc;
+                p_struct   = &(p_cfg->conn_cfg.params.l2cap_conn_cfg);
+                break;
+#endif
             case BLE_COMMON_CFG_VS_UUID:
                 fp_encoder = ble_common_cfg_vs_uuid_t_enc;
                 p_struct   = &(p_cfg->common_cfg.vs_uuid_cfg);

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**@file
  *
@@ -65,6 +65,12 @@
 #define SER_PHY_SPI_ORC_CHARACTER 0xFF //SPI over-read character. Character clocked out after an over-read of the transmit buffer
 
 static nrf_drv_spis_t m_spis = NRF_DRV_SPIS_INSTANCE(SER_PHY_SPI_SLAVE_INSTANCE);
+
+#ifdef NRF_SPIS0
+#define SPI_SLAVE_REG              NRF_SPIS0
+#else
+#define SPI_SLAVE_REG              NRF_SPIS1
+#endif
 
 //SPI raw peripheral device configuration data
 typedef struct
@@ -449,7 +455,7 @@ static void spi_slave_ppi_init(void)
 {
     uint32_t rdy_task = nrf_drv_gpiote_out_task_addr_get(m_spi_slave_raw_config.pin_rdy);
     //Configure PPI channel  to clear /RDY line
-    NRF_PPI->CH[m_spi_slave_raw_config.ppi_rdy_ch].EEP = (uint32_t)(&NRF_SPIS1->EVENTS_END);
+    NRF_PPI->CH[m_spi_slave_raw_config.ppi_rdy_ch].EEP = (uint32_t)(&SPI_SLAVE_REG->EVENTS_END);
     NRF_PPI->CH[m_spi_slave_raw_config.ppi_rdy_ch].TEP = rdy_task;
 
     //this works only for channels 0..15 - but soft device is using 8-15 anyway
@@ -468,13 +474,13 @@ static void spi_slave_gpio_init(void)
 /* ser_phy API function */
 void ser_phy_interrupts_enable(void)
 {
-    (void)sd_nvic_EnableIRQ(m_spis.irq);
+    (void)sd_nvic_EnableIRQ(nrfx_get_irq_number(m_spis.p_reg));
 }
 
 /* ser_phy API function */
 void ser_phy_interrupts_disable(void)
 {
-    (void)sd_nvic_DisableIRQ(m_spis.irq);
+    (void)sd_nvic_DisableIRQ(nrfx_get_irq_number(m_spis.p_reg));
 }
 
 /* ser_phy API function */

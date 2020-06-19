@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2018 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,220 +35,211 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
+
 #ifndef NRF_CRYPTO_ECDSA_H__
 #define NRF_CRYPTO_ECDSA_H__
 
-/** @file
+/** @addtogroup nrf_crypto
+ *  @{
+ *  @addtogroup nrf_crypto_ecdsa Elliptic Curve Digital Signature (ECDSA)
+ *  @{
+ *  @brief Provides elliptic curve cryptography functions for digital signature.
  *
- * @defgroup nrf_crypto_ecdsa ECDSA related functions
- * @{
- * @ingroup nrf_crypto
- *
- * @brief Provides ECDSA related functionality through nrf_crypto.
+ *  @addtogroup nrf_crypto_ecdsa_secp160r1    Definitions specific to secp160r1 (NIST 160-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp160r2    Definitions specific to secp160r2 (NIST 160-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp192r1    Definitions specific to secp192r1 (NIST 192-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp224r1    Definitions specific to secp224r1 (NIST 224-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp256r1    Definitions specific to secp256r1 (NIST 256-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp384r1    Definitions specific to secp384r1 (NIST 384-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp521r1    Definitions specific to secp521r1 (NIST 521-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp160k1    Definitions specific to secp160k1 (Koblitz 160-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp192k1    Definitions specific to secp192k1 (Koblitz 192-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp224k1    Definitions specific to secp224k1 (Koblitz 224-bit)
+ *  @addtogroup nrf_crypto_ecdsa_secp256k1    Definitions specific to secp256k1 (Koblitz 256-bit)
+ *  @addtogroup nrf_crypto_ecdsa_bp256r1      Definitions specific to bp256r1 (Brainpool 256-bit)
+ *  @addtogroup nrf_crypto_ecdsa_bp384r1      Definitions specific to bp384r1 (Brainpool 384-bit)
+ *  @addtogroup nrf_crypto_ecdsa_bp512r1      Definitions specific to bp512r1 (Brainpool 512-bit)
+ *  @addtogroup nrf_crypto_ecdsa_curve25519   Definitions specific to Curve25519
  */
 
 #include <stdint.h>
-#include "nrf_crypto_types.h"
+#include <stddef.h>
+
+#include "nrf_crypto_error.h"
+#include "nrf_crypto_ecc.h"
+#include "nrf_crypto_ecdsa_shared.h"
+#include "nrf_crypto_ecdsa_backend.h"
+
 
 #ifdef __cplusplus
 extern "C" {
-#if 0
-}
-#endif
 #endif
 
+#define NRF_CRYPTO_ECDSA_SECP160R1_SIGNATURE_SIZE  (2 * 160 / 8)   /**< @brief Size of a signature for secp160r1 (NIST 160-bit) curve.     @ingroup nrf_crypto_ecdsa_secp160r1 */
+#define NRF_CRYPTO_ECDSA_SECP160R2_SIGNATURE_SIZE  (2 * 160 / 8)   /**< @brief Size of a signature for secp160r2 (NIST 160-bit) curve.     @ingroup nrf_crypto_ecdsa_secp160r2 */
+#define NRF_CRYPTO_ECDSA_SECP192R1_SIGNATURE_SIZE  (2 * 192 / 8)   /**< @brief Size of a signature for secp192r1 (NIST 192-bit) curve.     @ingroup nrf_crypto_ecdsa_secp192r1 */
+#define NRF_CRYPTO_ECDSA_SECP224R1_SIGNATURE_SIZE  (2 * 224 / 8)   /**< @brief Size of a signature for secp224r1 (NIST 224-bit) curve.     @ingroup nrf_crypto_ecdsa_secp224r1 */
+#define NRF_CRYPTO_ECDSA_SECP256R1_SIGNATURE_SIZE  (2 * 256 / 8)   /**< @brief Size of a signature for secp256r1 (NIST 256-bit) curve.     @ingroup nrf_crypto_ecdsa_secp256r1 */
+#define NRF_CRYPTO_ECDSA_SECP384R1_SIGNATURE_SIZE  (2 * 384 / 8)   /**< @brief Size of a signature for secp384r1 (NIST 384-bit) curve.     @ingroup nrf_crypto_ecdsa_secp384r1 */
+#define NRF_CRYPTO_ECDSA_SECP521R1_SIGNATURE_SIZE  (2 * 528 / 8)   /**< @brief Size of a signature for secp521r1 (NIST 521-bit) curve.     @ingroup nrf_crypto_ecdsa_secp521r1 */
+#define NRF_CRYPTO_ECDSA_SECP160K1_SIGNATURE_SIZE  (2 * 160 / 8)   /**< @brief Size of a signature for secp160k1 (Koblitz 160-bit) curve.  @ingroup nrf_crypto_ecdsa_secp160k1 */
+#define NRF_CRYPTO_ECDSA_SECP192K1_SIGNATURE_SIZE  (2 * 192 / 8)   /**< @brief Size of a signature for secp192k1 (Koblitz 192-bit) curve.  @ingroup nrf_crypto_ecdsa_secp192k1 */
+#define NRF_CRYPTO_ECDSA_SECP224K1_SIGNATURE_SIZE  (2 * 224 / 8)   /**< @brief Size of a signature for secp224k1 (Koblitz 224-bit) curve.  @ingroup nrf_crypto_ecdsa_secp224k1 */
+#define NRF_CRYPTO_ECDSA_SECP256K1_SIGNATURE_SIZE  (2 * 256 / 8)   /**< @brief Size of a signature for secp256k1 (Koblitz 256-bit) curve.  @ingroup nrf_crypto_ecdsa_secp256k1 */
+#define NRF_CRYPTO_ECDSA_BP256R1_SIGNATURE_SIZE    (2 * 256 / 8)   /**< @brief Size of a signature for bp256r1 (Brainpool 256-bit) curve.  @ingroup nrf_crypto_ecdsa_bp256r1 */
+#define NRF_CRYPTO_ECDSA_BP384R1_SIGNATURE_SIZE    (2 * 384 / 8)   /**< @brief Size of a signature for bp384r1 (Brainpool 384-bit) curve.  @ingroup nrf_crypto_ecdsa_bp384r1 */
+#define NRF_CRYPTO_ECDSA_BP512R1_SIGNATURE_SIZE    (2 * 512 / 8)   /**< @brief Size of a signature for bp512r1 (Brainpool 512-bit) curve.  @ingroup nrf_crypto_ecdsa_bp512r1 */
+#define NRF_CRYPTO_ECDSA_CURVE25519_SIGNATURE_SIZE (2 * 256 / 8)   /**< @brief Size of a signature for Curve25519 curve.                   @ingroup nrf_crypto_ecdsa_curve25519 */
+#define NRF_CRYPTO_ECDSA_SIGNATURE_MAX_SIZE        (2 * NRF_CRYPTO_ECC_RAW_PRIVATE_KEY_MAX_SIZE)  /**< @brief Maximum size of a signature for all enabled curves. */
 
-/** @brief Macro to create an instance of a ECDSA sign context by a given name.
- *
- * @note    This creates the value length structure used for nrf_crypto APIs and a
- *          buffer to hold the sign context without using dynamically allocated memory.
+
+typedef uint8_t nrf_crypto_ecdsa_secp160r1_signature_t  [NRF_CRYPTO_ECDSA_SECP160R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp160r1 (NIST 160-bit) curve.     @ingroup nrf_crypto_ecdsa_secp160r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp160r2_signature_t  [NRF_CRYPTO_ECDSA_SECP160R2_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp160r2 (NIST 160-bit) curve.     @ingroup nrf_crypto_ecdsa_secp160r2 */
+typedef uint8_t nrf_crypto_ecdsa_secp192r1_signature_t  [NRF_CRYPTO_ECDSA_SECP192R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp192r1 (NIST 192-bit) curve.     @ingroup nrf_crypto_ecdsa_secp192r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp224r1_signature_t  [NRF_CRYPTO_ECDSA_SECP224R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp224r1 (NIST 224-bit) curve.     @ingroup nrf_crypto_ecdsa_secp224r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp256r1_signature_t  [NRF_CRYPTO_ECDSA_SECP256R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp256r1 (NIST 256-bit) curve.     @ingroup nrf_crypto_ecdsa_secp256r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp384r1_signature_t  [NRF_CRYPTO_ECDSA_SECP384R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp384r1 (NIST 384-bit) curve.     @ingroup nrf_crypto_ecdsa_secp384r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp521r1_signature_t  [NRF_CRYPTO_ECDSA_SECP521R1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp521r1 (NIST 521-bit) curve.     @ingroup nrf_crypto_ecdsa_secp521r1 */
+typedef uint8_t nrf_crypto_ecdsa_secp160k1_signature_t  [NRF_CRYPTO_ECDSA_SECP160K1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp160k1 (Koblitz 160-bit) curve.  @ingroup nrf_crypto_ecdsa_secp160k1 */
+typedef uint8_t nrf_crypto_ecdsa_secp192k1_signature_t  [NRF_CRYPTO_ECDSA_SECP192K1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp192k1 (Koblitz 192-bit) curve.  @ingroup nrf_crypto_ecdsa_secp192k1 */
+typedef uint8_t nrf_crypto_ecdsa_secp224k1_signature_t  [NRF_CRYPTO_ECDSA_SECP224K1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp224k1 (Koblitz 224-bit) curve.  @ingroup nrf_crypto_ecdsa_secp224k1 */
+typedef uint8_t nrf_crypto_ecdsa_secp256k1_signature_t  [NRF_CRYPTO_ECDSA_SECP256K1_SIGNATURE_SIZE];    /**< @brief Type to hold signature output for secp256k1 (Koblitz 256-bit) curve.  @ingroup nrf_crypto_ecdsa_secp256k1 */
+typedef uint8_t nrf_crypto_ecdsa_bp256r1_signature_t    [NRF_CRYPTO_ECDSA_BP256R1_SIGNATURE_SIZE];      /**< @brief Type to hold signature output for bp256r1 (Brainpool 256-bit) curve.  @ingroup nrf_crypto_ecdsa_bp256r1 */
+typedef uint8_t nrf_crypto_ecdsa_bp384r1_signature_t    [NRF_CRYPTO_ECDSA_BP384R1_SIGNATURE_SIZE];      /**< @brief Type to hold signature output for bp384r1 (Brainpool 384-bit) curve.  @ingroup nrf_crypto_ecdsa_bp384r1 */
+typedef uint8_t nrf_crypto_ecdsa_bp512r1_signature_t    [NRF_CRYPTO_ECDSA_BP512R1_SIGNATURE_SIZE];      /**< @brief Type to hold signature output for bp512r1 (Brainpool 512-bit) curve.  @ingroup nrf_crypto_ecdsa_bp512r1 */
+typedef uint8_t nrf_crypto_ecdsa_curve25519_signature_t [NRF_CRYPTO_ECDSA_CURVE25519_SIGNATURE_SIZE];   /**< @brief Type to hold signature output for Curve25519 curve.                   @ingroup nrf_crypto_ecdsa_curve25519 */
+typedef uint8_t nrf_crypto_ecdsa_signature_t            [NRF_CRYPTO_ECDSA_SIGNATURE_MAX_SIZE];          /**< @brief Type big enough to hold signature output for any curve type. */
+
+
+typedef nrf_crypto_backend_secp160r1_sign_context_t  nrf_crypto_ecdsa_secp160r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp160r1 (NIST 160-bit).     @ingroup nrf_crypto_ecdsa_secp160r1 */
+typedef nrf_crypto_backend_secp160r2_sign_context_t  nrf_crypto_ecdsa_secp160r2_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp160r2 (NIST 160-bit).     @ingroup nrf_crypto_ecdsa_secp160r2 */
+typedef nrf_crypto_backend_secp192r1_sign_context_t  nrf_crypto_ecdsa_secp192r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp192r1 (NIST 192-bit).     @ingroup nrf_crypto_ecdsa_secp192r1 */
+typedef nrf_crypto_backend_secp224r1_sign_context_t  nrf_crypto_ecdsa_secp224r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp224r1 (NIST 224-bit).     @ingroup nrf_crypto_ecdsa_secp224r1 */
+typedef nrf_crypto_backend_secp256r1_sign_context_t  nrf_crypto_ecdsa_secp256r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp256r1 (NIST 256-bit).     @ingroup nrf_crypto_ecdsa_secp256r1 */
+typedef nrf_crypto_backend_secp384r1_sign_context_t  nrf_crypto_ecdsa_secp384r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp384r1 (NIST 384-bit).     @ingroup nrf_crypto_ecdsa_secp384r1 */
+typedef nrf_crypto_backend_secp521r1_sign_context_t  nrf_crypto_ecdsa_secp521r1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp521r1 (NIST 521-bit).     @ingroup nrf_crypto_ecdsa_secp521r1 */
+typedef nrf_crypto_backend_secp160k1_sign_context_t  nrf_crypto_ecdsa_secp160k1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp160k1 (Koblitz 160-bit).  @ingroup nrf_crypto_ecdsa_secp160k1 */
+typedef nrf_crypto_backend_secp192k1_sign_context_t  nrf_crypto_ecdsa_secp192k1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp192k1 (Koblitz 192-bit).  @ingroup nrf_crypto_ecdsa_secp192k1 */
+typedef nrf_crypto_backend_secp224k1_sign_context_t  nrf_crypto_ecdsa_secp224k1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp224k1 (Koblitz 224-bit).  @ingroup nrf_crypto_ecdsa_secp224k1 */
+typedef nrf_crypto_backend_secp256k1_sign_context_t  nrf_crypto_ecdsa_secp256k1_sign_context_t;     /**< @brief Context used to store temporary data during signing with curve secp256k1 (Koblitz 256-bit).  @ingroup nrf_crypto_ecdsa_secp256k1 */
+typedef nrf_crypto_backend_bp256r1_sign_context_t    nrf_crypto_ecdsa_bp256r1_sign_context_t;       /**< @brief Context used to store temporary data during signing with curve bp256r1 (Brainpool 256-bit).  @ingroup nrf_crypto_ecdsa_bp256r1 */
+typedef nrf_crypto_backend_bp384r1_sign_context_t    nrf_crypto_ecdsa_bp384r1_sign_context_t;       /**< @brief Context used to store temporary data during signing with curve bp384r1 (Brainpool 384-bit).  @ingroup nrf_crypto_ecdsa_bp384r1 */
+typedef nrf_crypto_backend_bp512r1_sign_context_t    nrf_crypto_ecdsa_bp512r1_sign_context_t;       /**< @brief Context used to store temporary data during signing with curve bp512r1 (Brainpool 512-bit).  @ingroup nrf_crypto_ecdsa_bp512r1 */
+typedef nrf_crypto_backend_curve25519_sign_context_t nrf_crypto_ecdsa_curve25519_sign_context_t;    /**< @brief Context used to store temporary data during signing with curve Curve25519.                   @ingroup nrf_crypto_ecdsa_curve25519 */
+
+
+typedef nrf_crypto_backend_secp160r1_verify_context_t  nrf_crypto_ecdsa_secp160r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp160r1 (NIST 160-bit).     @ingroup nrf_crypto_ecdsa_secp160r1 */
+typedef nrf_crypto_backend_secp160r2_verify_context_t  nrf_crypto_ecdsa_secp160r2_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp160r2 (NIST 160-bit).     @ingroup nrf_crypto_ecdsa_secp160r2 */
+typedef nrf_crypto_backend_secp192r1_verify_context_t  nrf_crypto_ecdsa_secp192r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp192r1 (NIST 192-bit).     @ingroup nrf_crypto_ecdsa_secp192r1 */
+typedef nrf_crypto_backend_secp224r1_verify_context_t  nrf_crypto_ecdsa_secp224r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp224r1 (NIST 224-bit).     @ingroup nrf_crypto_ecdsa_secp224r1 */
+typedef nrf_crypto_backend_secp256r1_verify_context_t  nrf_crypto_ecdsa_secp256r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp256r1 (NIST 256-bit).     @ingroup nrf_crypto_ecdsa_secp256r1 */
+typedef nrf_crypto_backend_secp384r1_verify_context_t  nrf_crypto_ecdsa_secp384r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp384r1 (NIST 384-bit).     @ingroup nrf_crypto_ecdsa_secp384r1 */
+typedef nrf_crypto_backend_secp521r1_verify_context_t  nrf_crypto_ecdsa_secp521r1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp521r1 (NIST 521-bit).     @ingroup nrf_crypto_ecdsa_secp521r1 */
+typedef nrf_crypto_backend_secp160k1_verify_context_t  nrf_crypto_ecdsa_secp160k1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp160k1 (Koblitz 160-bit).  @ingroup nrf_crypto_ecdsa_secp160k1 */
+typedef nrf_crypto_backend_secp192k1_verify_context_t  nrf_crypto_ecdsa_secp192k1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp192k1 (Koblitz 192-bit).  @ingroup nrf_crypto_ecdsa_secp192k1 */
+typedef nrf_crypto_backend_secp224k1_verify_context_t  nrf_crypto_ecdsa_secp224k1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp224k1 (Koblitz 224-bit).  @ingroup nrf_crypto_ecdsa_secp224k1 */
+typedef nrf_crypto_backend_secp256k1_verify_context_t  nrf_crypto_ecdsa_secp256k1_verify_context_t;     /**< @brief Context used to store temporary data during verifying with curve secp256k1 (Koblitz 256-bit).  @ingroup nrf_crypto_ecdsa_secp256k1 */
+typedef nrf_crypto_backend_bp256r1_verify_context_t    nrf_crypto_ecdsa_bp256r1_verify_context_t;       /**< @brief Context used to store temporary data during verifying with curve bp256r1 (Brainpool 256-bit).  @ingroup nrf_crypto_ecdsa_bp256r1 */
+typedef nrf_crypto_backend_bp384r1_verify_context_t    nrf_crypto_ecdsa_bp384r1_verify_context_t;       /**< @brief Context used to store temporary data during verifying with curve bp384r1 (Brainpool 384-bit).  @ingroup nrf_crypto_ecdsa_bp384r1 */
+typedef nrf_crypto_backend_bp512r1_verify_context_t    nrf_crypto_ecdsa_bp512r1_verify_context_t;       /**< @brief Context used to store temporary data during verifying with curve bp512r1 (Brainpool 512-bit).  @ingroup nrf_crypto_ecdsa_bp512r1 */
+typedef nrf_crypto_backend_curve25519_verify_context_t nrf_crypto_ecdsa_curve25519_verify_context_t;    /**< @brief Context used to store temporary data during verifying with curve Curve25519.                   @ingroup nrf_crypto_ecdsa_curve25519 */
+
+
+/** @brief Union holding a context for ECDSA hash sign.
  */
-#define NRF_CRYPTO_ECDSA_SIGN_CONTEXT_INSTANCE_CREATE(name)             \
-static uint8_t name ## _buffer[NRF_CRYPTO_ECDSASIGN_CONTEXT_SIZE];      \
-static nrf_value_length_t  name =                                       \
-{                                                                       \
-    .p_value = name ## _buffer,                                         \
-    .length = NRF_CRYPTO_SIGN_CONTEXT_SIZE                              \
-}
+typedef union
+{
+    nrf_crypto_ecdsa_secp160r1_sign_context_t  context_secp160r1;    /**< @brief Occupies space for secp160r1 (NIST 160-bit). */
+    nrf_crypto_ecdsa_secp160r2_sign_context_t  context_secp160r2;    /**< @brief Occupies space for secp160r2 (NIST 160-bit). */
+    nrf_crypto_ecdsa_secp192r1_sign_context_t  context_secp192r1;    /**< @brief Occupies space for secp192r1 (NIST 192-bit). */
+    nrf_crypto_ecdsa_secp224r1_sign_context_t  context_secp224r1;    /**< @brief Occupies space for secp224r1 (NIST 224-bit). */
+    nrf_crypto_ecdsa_secp256r1_sign_context_t  context_secp256r1;    /**< @brief Occupies space for secp256r1 (NIST 256-bit). */
+    nrf_crypto_ecdsa_secp384r1_sign_context_t  context_secp384r1;    /**< @brief Occupies space for secp384r1 (NIST 384-bit). */
+    nrf_crypto_ecdsa_secp521r1_sign_context_t  context_secp521r1;    /**< @brief Occupies space for secp521r1 (NIST 521-bit). */
+    nrf_crypto_ecdsa_secp160k1_sign_context_t  context_secp160k1;    /**< @brief Occupies space for secp160k1 (Koblitz 160-bit). */
+    nrf_crypto_ecdsa_secp192k1_sign_context_t  context_secp192k1;    /**< @brief Occupies space for secp192k1 (Koblitz 192-bit). */
+    nrf_crypto_ecdsa_secp224k1_sign_context_t  context_secp224k1;    /**< @brief Occupies space for secp224k1 (Koblitz 224-bit). */
+    nrf_crypto_ecdsa_secp256k1_sign_context_t  context_secp256k1;    /**< @brief Occupies space for secp256k1 (Koblitz 256-bit). */
+    nrf_crypto_ecdsa_bp256r1_sign_context_t    context_bp256r1;      /**< @brief Occupies space for bp256r1 (Brainpool 256-bit). */
+    nrf_crypto_ecdsa_bp384r1_sign_context_t    context_bp384r1;      /**< @brief Occupies space for bp384r1 (Brainpool 384-bit). */
+    nrf_crypto_ecdsa_bp512r1_sign_context_t    context_bp512r1;      /**< @brief Occupies space for bp512r1 (Brainpool 512-bit). */
+    nrf_crypto_ecdsa_curve25519_sign_context_t context_curve25519;   /**< @brief Occupies space for Curve25519. */
+} nrf_crypto_ecdsa_sign_context_t;
 
 
-/** @brief Macro to create an instance of a ECDSA verify context by a given name.
- *
- * @note    This creates the value length structure used for nrf_crypto APIs and a
- *          buffer to hold the verify context without using dynamically allocated memory.
+/** @brief Union holding a context for ECDSA hash verify.
  */
-#define NRF_CRYPTO_VERIFY_CONTEXT_INSTANCE_CREATE(name)                 \
-static uint8_t name ## _buffer[NRF_CRYPTO_ECDSA_VERIFY_CONTEXT_SIZE];   \
-static nrf_value_length_t  name =                                       \
-{                                                                       \
-    .p_value = name ## _buffer,                                         \
-    .length = NRF_CRYPTO_ECDSA_VERIFY_CONTEXT_SIZE                      \
-}
+typedef union
+{
+    nrf_crypto_ecdsa_secp160r1_verify_context_t  context_secp160r1;     /**< @brief Occupies spece for secp160r1 (NIST 160-bit). */
+    nrf_crypto_ecdsa_secp160r2_verify_context_t  context_secp160r2;     /**< @brief Occupies spece for secp160r2 (NIST 160-bit). */
+    nrf_crypto_ecdsa_secp192r1_verify_context_t  context_secp192r1;     /**< @brief Occupies spece for secp192r1 (NIST 192-bit). */
+    nrf_crypto_ecdsa_secp224r1_verify_context_t  context_secp224r1;     /**< @brief Occupies spece for secp224r1 (NIST 224-bit). */
+    nrf_crypto_ecdsa_secp256r1_verify_context_t  context_secp256r1;     /**< @brief Occupies spece for secp256r1 (NIST 256-bit). */
+    nrf_crypto_ecdsa_secp384r1_verify_context_t  context_secp384r1;     /**< @brief Occupies spece for secp384r1 (NIST 384-bit). */
+    nrf_crypto_ecdsa_secp521r1_verify_context_t  context_secp521r1;     /**< @brief Occupies spece for secp521r1 (NIST 521-bit). */
+    nrf_crypto_ecdsa_secp160k1_verify_context_t  context_secp160k1;     /**< @brief Occupies spece for secp160k1 (Koblitz 160-bit). */
+    nrf_crypto_ecdsa_secp192k1_verify_context_t  context_secp192k1;     /**< @brief Occupies spece for secp192k1 (Koblitz 192-bit). */
+    nrf_crypto_ecdsa_secp224k1_verify_context_t  context_secp224k1;     /**< @brief Occupies spece for secp224k1 (Koblitz 224-bit). */
+    nrf_crypto_ecdsa_secp256k1_verify_context_t  context_secp256k1;     /**< @brief Occupies spece for secp256k1 (Koblitz 256-bit). */
+    nrf_crypto_ecdsa_bp256r1_verify_context_t    context_bp256r1;       /**< @brief Occupies spece for bp256r1 (Brainpool 256-bit). */
+    nrf_crypto_ecdsa_bp384r1_verify_context_t    context_bp384r1;       /**< @brief Occupies spece for bp384r1 (Brainpool 384-bit). */
+    nrf_crypto_ecdsa_bp512r1_verify_context_t    context_bp512r1;       /**< @brief Occupies spece for bp512r1 (Brainpool 512-bit). */
+    nrf_crypto_ecdsa_curve25519_verify_context_t context_curve25519;    /**< @brief Occupies spece for Curve25519. */
+} nrf_crypto_ecdsa_verify_context_t;
 
 
-/** @brief Macro to create an instance of an ECDSA signature by a given name and type.
+/** @brief Sign a hash of a message.
  *
- * @param[in]   name    Name of the ECDSA signature instance.
- * @param[in]   type    Either SECP160R1, SECP192R1, SECP224R1, SECP256R1, SECP384R1,
- *                      SECP521R1, SECP192K1, SECP224K1, or SECP256K1
- *
- * @note    This creates the value length structure used for nrf_crypto APIs and a
- *          buffer to hold the signature without using dynamically allocated memory.
+ *  @param[in]     p_context         Pointer to temporary structure holding context information.
+ *                                   If it is NULL, necessary data will be allocated with
+ *                                   @ref NRF_CRYPTO_ALLOC and freed at the end of the function.
+ *  @param[in]     p_private_key     Pointer to structure holding a private key.
+ *  @param[in]     p_hash            Pointer to hash to sign.
+ *  @param[in]     hash_size         Number of bytes in p_hash.
+ *  @param[out]    p_signature       Pointer to buffer where digital signature will be put.
+ *  @param[in,out] p_signature_size  Maximum number of bytes that @p p_signature buffer can hold on input
+ *                                   and the actual number of bytes used by the data on output.
+ *                                   Actual size for selected curve is defined by
+ *                                   the preprocessor definitions, e.g.
+ *                                   @ref NRF_CRYPTO_ECDSA_SECP256R1_SIGNATURE_SIZE.
  */
-#define NRF_CRYPTO_ECDSA_SIGNATURE_CREATE(name, type)                                           \
-static uint8_t  name ## _buffer[STRING_CONCATENATE(NRF_CRYPTO_ECDSA_SIGNATURE_SIZE_, type)];    \
-static nrf_value_length_t name =                                                                \
-{                                                                                               \
-    .p_value = name ## _buffer,                                                                 \
-    .length = STRING_CONCATENATE(NRF_CRYPTO_ECDSA_SIGNATURE_SIZE_, type)                        \
-}
+ret_code_t nrf_crypto_ecdsa_sign(
+    nrf_crypto_ecdsa_sign_context_t       * p_context,
+    nrf_crypto_ecc_private_key_t    const * p_private_key,
+    uint8_t                         const * p_hash,
+    size_t                                  hash_size,
+    uint8_t                               * p_signature,
+    size_t                                * p_signature_size);
 
 
-/** @brief Macro to create an instance of an ECDSA signature by a given name, type and input.
+/** @brief Verify a signature using a hash of a message.
  *
- *  If the input is not of the correct size a static assert will be occur compile-time.
- *
- * @note    This creates the value length structure used for nrf_crypto APIs and a
- *          buffer to hold the signature without using dynamically allocated memory.
- *
- * @param[in]   name    Name of the ECDSA signature instance.
- * @param[in]   type    Either SECP160R1, SECP192R1, SECP224R1, SECP256R1, SECP384R1,
- *                      SECP521R1, SECP192K1, SECP224K1, or SECP256K1
- * @param[in]   input   Input must be an array of correct size according to the curve type.
- *
+ *  @param[in]     p_context       Pointer to temporary structure holding context information.
+ *                                 If it is NULL, necessary data will be allocated with
+ *                                 @ref NRF_CRYPTO_ALLOC and freed at the end of the function.
+ *  @param[in]     p_public_key    Pointer to structure holding a public key.
+ *  @param[in]     p_hash          Pointer to hash to verify.
+ *  @param[in]     hash_size       Number of bytes in p_hash.
+ *  @param[in]     p_signature     Pointer to buffer containing digital signature.
+ *  @param[in,out] signature_size  Number of bytes in p_signature.
  */
-#define NRF_CRYPTO_ECDSA_SIGNATURE_INSTANCE_CREATE_FROM_INPUT(name, type, input)                \
-STATIC_ASSERT(sizeof(input) == STRING_CONCATENATE(NRF_CRYPTO_ECDSA_SIGNATURE_SIZE_, type));     \
-static nrf_value_length_t name =                                                                \
-{                                                                                               \
-    .p_value = name ## _buffer,                                                                 \
-    .length = STRING_CONCATENATE(NRF_CRYPTO_ECDSA_SIGNATURE_SIZE_, type)                        \
-}
-
-
-/**@brief   Function to get the size of a ECDSA signature given curve type.
- *
- * @param[in]   curve_type  Elliptic curve to use.
- * @param[in]   p_sig_size  Pointer to variable to hold size of a signature.
- *
- * @retval  NRF_SUCCESS             If the he signature size was calculated.
- * @retval  NRF_ERROR_NULL          If p_sizes was NULL.
- * @retval  NRF_ERROR_NOT_SUPPORTED Selected curve was not supported.
- */
-uint32_t nrf_crypto_ecdsa_signature_size_get(nrf_ecc_curve_type_t curve_type, uint32_t * p_sig_size);
-
-
-/**@brief   Function to get the sizes used for ECDSA sign/verify given curve_type
- *
- * @details This function will report back the private/public key, signature and hash sizes.
- *
- * @param[in]   sig_info    Elliptic curve and hash to use.
- * @param[in]   p_sizes     Pointer to variable to hold the key, hash and signature sizes.
- *
- * @retval  NRF_SUCCESS             If the ECDSA sizes was calculated.
- * @retval  NRF_ERROR_NULL          If p_sizes was NULL.
- * @retval  NRF_ERROR_NOT_SUPPORTED Selected curve or hash was not supported.
- */
-uint32_t nrf_crypto_ecdsa_sizes_get(nrf_crypto_signature_info_t     sig_info,
-                                    nrf_crypto_ecdsa_sizes_t      * p_sizes);
-
-
-/**@brief   Function to allocate dynamic memory for holding a signature
- *
- * @note    The signature must be allocated before calling this
- *          function.
- *
- * @note    If p_raw_signature is not NULL, then the content will be copied to the
- *          allocated buffer.
- *
- * @param[in]       sig_info        Curve and hash function used for representing a signature
- * @param[in,out]   p_signature     Pointer to value-length structure to hold the signature.
- * @param[in]       p_raw_signature Pointer to byte representation of raw key given curve type.
- *
- * @retval  NRF_SUCCESS     Memory for the signature was successfully allocated.
- * @retval  NRF_ERROR_NULL  Signature parameter was NULL.
- * @retval  Any other error code reported by the memory manager.
- */
-uint32_t nrf_crypto_ecdsa_signature_allocate(nrf_crypto_signature_info_t    sig_info,
-                                             nrf_value_length_t           * p_signature,
-                                             nrf_value_length_t     const * p_raw_signature);
-
-
-/**@brief Function to free dynamic memory allocated for holding a signature
- *
- * @param[in,out]   p_signature     Pointer to value-length structure that holds the
- *                                  allocated space to be freed.
- *
- * @retval  NRF_SUCCESS     Memory for the signature was successfully allocated.
- * @retval  NRF_ERROR_NULL  Signature parameter was NULL.
- * @retval  Any other error code reported by the memory manager.
- */
-uint32_t nrf_crypto_ecdsa_signature_free(nrf_value_length_t * p_signature);
-
-
-/**@brief Function for signing a hash using a private key.
- *
- * @note    Key sizes and signature must be allocated before calling this
- *          function.
- *
- * @param[in]       sig_info        Elliptic curve to use for signing and endianness
- *                                  of the resulting signature.
- * @param[in]       p_private_key   Pointer to structure holding private key.
- * @param[in]       p_hash          Pointer to structure holding hash to use for signing.
- * @param[in,out]   p_signature     Pointer to structure holding signature.
- *
- * @retval  NRF_SUCCESS                 If the signature was created successfully.
- * @retval  NRF_ERROR_INVALID_STATE     If the function was called when nrf_crypto was
- *                                      uninitialized.
- * @retval  NRF_ERROR_NULL              If the provided key, hash or signature parameters was NULL.
- * @retval  NRF_ERROR_NOT_SUPPORTED     If the selected curve or hash type is not supported.
- * @retval  NRF_ERROR_INVALID_ADDR      If the key, hash or signature paramenters aren't aligned.
- * @retval  NRF_ERROR_INVALID_LENGTH    If the allocated length of the provided private key or hash
- *                                      is invalid or the signature is bigger than the size of the
- *                                      provided buffer.
- * @retval  NRF_ERROR_INVALID_DATA      If any of the keys or result data is deemed invalid by the
- *                                      nrf_crypto backend.
- * @retval  NRF_ERROR_INTERNAL          If an internal error occured in the nrf_crypto backend.
- */
-uint32_t nrf_crypto_ecdsa_sign_hash(nrf_crypto_signature_info_t  sig_info,
-                                    nrf_value_length_t   const * p_private_key,
-                                    nrf_value_length_t   const * p_hash,
-                                    nrf_value_length_t         * p_signature);
-
-
-/**@brief Function for verifying a hash using a public key.
- *
- * @note    Key sizes and signature must be allocated before calling this
- *          function.
- *
- * @param[in]       sig_info        Elliptic curve to use for verification and endianness
- *                                  of the signature given as input.
- * @param[in]       p_public_key    Pointer to structure holding public key.
- * @param[in]       p_hash          Pointer to structure holding hash to use for verification.
- * @param[in,out]   p_signature     Pointer to structure holding signature.
- *
- * @retval  NRF_SUCCESS                 If the signature was verified and is valid.
- * @retval  NRF_ERROR_INVALID_DATA      If the signature did not match the provided hash.
- * @retval  NRF_ERROR_INVALID_ADDR      If the key, hash or signature data aren't aligned.
- * @retval  NRF_ERROR_INVALID_STATE     If the function was called when nrf_crypto was uninitialized.
- * @retval  NRF_ERROR_NULL              If the provided key, hash or signature parameters was NULL.
- * @retval  NRF_ERROR_INVALID_LENGTH    If the length of the provided public key, hash, or signature
- *                                      is invalid.
- * @retval  NRF_ERROR_NOT_SUPPORTED     If the selected curve or hash type is not supported.
- * @retval  NRF_ERROR_INVALID_ADDR      If any of the provided pointers is invalid.
- * @retval  NRF_ERROR_INTERNAL          If an internal error occured in the nrf_crypto backend.
- */
-uint32_t nrf_crypto_ecdsa_verify_hash(nrf_crypto_signature_info_t  sig_info,
-                                      nrf_value_length_t   const * p_public_key,
-                                      nrf_value_length_t   const * p_hash,
-                                      nrf_value_length_t   const * p_signature);
+ret_code_t nrf_crypto_ecdsa_verify(
+    nrf_crypto_ecdsa_verify_context_t       * p_context,
+    nrf_crypto_ecc_public_key_t       const * p_public_key,
+    uint8_t                           const * p_hash,
+    size_t                                    hash_size,
+    uint8_t                           const * p_signature,
+    size_t                                    signature_size);
 
 #ifdef __cplusplus
 }
 #endif
 
-/**@} */
+/** @}
+ *  @}
+ */
 
-#endif // #ifndef NRF_CRYPTO_ECDSA_H__
+#endif // NRF_CRYPTO_ECDSA_H__

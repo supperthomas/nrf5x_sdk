@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
 * @defgroup nrf_queue Queue module
@@ -54,10 +54,16 @@
 #include "sdk_errors.h"
 #include "app_util.h"
 #include "app_util_platform.h"
+#include "nrf_log_instance.h"
+#include "nrf_section.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** @brief Name of the module used for logger messaging.
+ */
+#define NRF_QUEUE_LOG_NAME queue
 
 /**@brief Queue control block. */
 typedef struct
@@ -77,13 +83,22 @@ typedef enum
 /**@brief Instance of the queue. */
 typedef struct
 {
-    nrf_queue_cb_t * p_cb;          //!< Pointer to the instance control block.
-    void           * p_buffer;      //!< Pointer to the memory that is used as storage.
-    size_t           size;          //!< Size of the queue.
-    size_t           element_size;  //!< Size of one element.
-    nrf_queue_mode_t mode;          //!< Mode of the queue.
+    nrf_queue_cb_t * p_cb;              //!< Pointer to the instance control block.
+    void           * p_buffer;          //!< Pointer to the memory that is used as storage.
+    size_t           size;              //!< Size of the queue.
+    size_t           element_size;      //!< Size of one element.
+    nrf_queue_mode_t mode;              //!< Mode of the queue.
+#if NRF_QUEUE_CLI_CMDS
+    const char      * p_name;           //!< Pointer to string with queue name.
+#endif
+    NRF_LOG_INSTANCE_PTR_DECLARE(p_log) //!< Pointer to instance of the logger object (Conditionally compiled).
 } nrf_queue_t;
 
+#if NRF_QUEUE_CLI_CMDS
+#define __NRF_QUEUE_ASSIGN_POOL_NAME(_name)            .p_name = STRINGIFY(_name),
+#else
+#define __NRF_QUEUE_ASSIGN_POOL_NAME(_name)
+#endif
 /**@brief Create a queue instance.
  *
  * @note  This macro reserves memory for the given queue instance.
@@ -93,17 +108,67 @@ typedef struct
  * @param[in]   _size       Size of the queue.
  * @param[in]   _mode       Mode of the queue.
  */
-#define NRF_QUEUE_DEF(_type, _name, _size, _mode)                   \
-    static _type             _name##_nrf_queue_buffer[(_size) + 1]; \
-    static nrf_queue_cb_t    _name##_nrf_queue_cb;                  \
-    static const nrf_queue_t _name =                                \
-        {                                                           \
-            .p_cb           = &_name##_nrf_queue_cb,                \
-            .p_buffer       = _name##_nrf_queue_buffer,             \
-            .size           = (_size),                              \
-            .element_size   = sizeof(_type),                        \
-            .mode           = _mode,                                \
+#define NRF_QUEUE_DEF(_type, _name, _size, _mode)                                        \
+    static _type             CONCAT_2(_name, _nrf_queue_buffer[(_size) + 1]);            \
+    static nrf_queue_cb_t    CONCAT_2(_name, _nrf_queue_cb);                             \
+    NRF_LOG_INSTANCE_REGISTER(NRF_QUEUE_LOG_NAME, _name,                                 \
+                                  NRF_QUEUE_CONFIG_INFO_COLOR,                           \
+                                  NRF_QUEUE_CONFIG_DEBUG_COLOR,                          \
+                                  NRF_QUEUE_CONFIG_LOG_INIT_FILTER_LEVEL,                \
+                                  NRF_QUEUE_CONFIG_LOG_ENABLED ?                         \
+                                    NRF_QUEUE_CONFIG_LOG_LEVEL : NRF_LOG_SEVERITY_NONE); \
+     NRF_SECTION_ITEM_REGISTER(nrf_queue, const nrf_queue_t  _name) =                    \
+        {                                                                                \
+            .p_cb           = &CONCAT_2(_name, _nrf_queue_cb),                           \
+            .p_buffer       = CONCAT_2(_name,_nrf_queue_buffer),                         \
+            .size           = (_size),                                                   \
+            .element_size   = sizeof(_type),                                             \
+            .mode           = _mode,                                                     \
+            __NRF_QUEUE_ASSIGN_POOL_NAME(_name)                                          \
+            NRF_LOG_INSTANCE_PTR_INIT(p_log, NRF_QUEUE_LOG_NAME, _name)                  \
         }
+
+#if !(defined(__LINT__))
+/**@brief Create multiple queue instances.
+ *
+ * @note  This macro reserves memory for array of queue instances.
+ *
+ * @param[in]   _type       Type which is stored.
+ * @param[in]   _name       Name of the array with queue instances.
+ * @param[in]   _size       Size of single queue instance.
+ * @param[in]   _mode       Mode of single queue instance.
+ * @param[in]   _num        Number of queue instances within array.
+ */
+#define NRF_QUEUE_ARRAY_DEF(_type, _name, _size, _mode, _num)                                 \
+    MACRO_REPEAT_FOR(_num, NRF_QUEUE_ARRAY_INSTANCE_ELEMS_DEC, _type, _name, _size, _mode)    \
+    static const nrf_queue_t _name[] =                                                        \
+        {                                                                                     \
+            MACRO_REPEAT_FOR(_num, NRF_QUEUE_ARRAY_INSTANCE_INIT, _type, _name, _size, _mode) \
+        };                                                                                    \
+    STATIC_ASSERT(ARRAY_SIZE(_name) == _num)
+#else
+#define NRF_QUEUE_ARRAY_DEF(_type, _name, _size, _mode, _num) \
+    static const nrf_queue_t _name[_num];
+#endif // !(defined(__LINT__))
+
+/**@brief Helping macro used to declare elements for nrf_queue_t instance.
+ *        Used in @ref NRF_QUEUE_ARRAY_DEF.
+ */
+#define NRF_QUEUE_ARRAY_INSTANCE_ELEMS_DEC(_num, _type, _name, _size, _mode)     \
+    static _type          CONCAT_3(_name, _num, _nrf_queue_buffer[(_size) + 1]); \
+    static nrf_queue_cb_t CONCAT_3(_name, _num, _nrf_queue_cb);
+
+/**@brief Helping macro used to initialize nrf_queue_t instance in an array fashion.
+ *        Used in @ref NRF_QUEUE_ARRAY_DEF.
+ */
+#define NRF_QUEUE_ARRAY_INSTANCE_INIT(_num, _type, _name, _size, _mode) \
+    {                                                                   \
+        .p_cb           = &CONCAT_3(_name, _num, _nrf_queue_cb),        \
+        .p_buffer       = CONCAT_3(_name, _num, _nrf_queue_buffer),     \
+        .size           = (_size),                                      \
+        .element_size   = sizeof(_type),                                \
+        .mode           = _mode,                                        \
+    },
 
 /**@brief Declare a queue interface.
  *
@@ -384,6 +449,13 @@ size_t nrf_queue_available_get(nrf_queue_t const * p_queue);
  * @return      Maximal queue utilization.
  */
 size_t nrf_queue_max_utilization_get(nrf_queue_t const * p_queue);
+
+/**@brief Function for resetting the maximal queue utilization.
+ *
+ * @param[in]   p_queue     Pointer to the queue instance.
+ *
+ */
+void nrf_queue_max_utilization_reset(nrf_queue_t const * p_queue);
 
 /**@brief Function for resetting the queue state.
  *

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(NRF_DRV_CSENSE)
@@ -65,7 +65,7 @@
 
 #if USE_COMP == 0
 #ifdef ADC_PRESENT
-#include "nrf_drv_adc.h"
+#include "nrfx_adc.h"
 
 /**
  * @defgroup adc_defines ADC defines to count input voltage.
@@ -77,7 +77,7 @@
 /* @} */
 
 /* ADC channel used to call conversion. */
-static nrf_drv_adc_channel_t adc_channel = NRF_DRV_ADC_DEFAULT_CHANNEL(0);
+static nrfx_adc_channel_t adc_channel = NRFX_ADC_DEFAULT_CHANNEL(NRF_ADC_CONFIG_INPUT_0);
 #elif defined(SAADC_PRESENT)
 #include "nrf_drv_saadc.h"
 
@@ -115,7 +115,7 @@ static const nrf_drv_timer_t m_timer1 = NRF_DRV_TIMER_INSTANCE(TIMER1_FOR_CSENSE
 /* Configuration of the capacitive sensor module. */
 typedef struct
 {
-    volatile nrf_drv_state_t        module_state;                       /**< State of the module. */
+    volatile nrfx_drv_state_t       module_state;                       /**< State of the module. */
     nrf_drv_csense_event_handler_t  event_handler;                      /**< Event handler for capacitor sensor events. */
     uint16_t                        analog_values[MAX_ANALOG_INPUTS];   /**< Array containing analog values measured on the corresponding COMP/ADC channel. */
     volatile bool                   busy;                               /**< Indicates state of module - busy if there are ongoing conversions. */
@@ -157,7 +157,7 @@ static void conversion_handler(uint16_t val)
     m_csense.channels_to_read &= ~(1UL<<m_csense.cur_chann_idx);
 
     // decide if there will be more conversions
-    if(m_csense.channels_to_read == 0)
+    if (m_csense.channels_to_read == 0)
     {
         m_csense.busy = false;
 #if USE_COMP == 0 && defined(SAADC_PRESENT)
@@ -167,12 +167,12 @@ static void conversion_handler(uint16_t val)
 
     m_csense.event_handler(&event_struct);
 
-    if(m_csense.channels_to_read > 0)     // Start new conversion.
+    if (m_csense.channels_to_read > 0)     // Start new conversion.
     {
         ret_code_t err_code;
         calculate_next_channel();
         err_code = nrf_drv_csense_sample();
-        if(err_code != NRF_SUCCESS)
+        if (err_code != NRF_SUCCESS)
         {
             return;
         }
@@ -191,7 +191,7 @@ static void conversion_handler(uint16_t val)
  */
 static void counter_compare_handler(nrf_timer_event_t event_type, void* p_context)
 {
-    if(event_type == NRF_TIMER_EVENT_COMPARE0)
+    if (event_type == NRF_TIMER_EVENT_COMPARE0)
     {
         uint16_t val =  nrf_drv_timer_capture_get(&m_timer1, NRF_TIMER_CC_CHANNEL1);
         nrf_drv_timer_pause(&m_timer1);
@@ -261,7 +261,7 @@ static ret_code_t ppi_init(void)
         return NRF_ERROR_INTERNAL;
     }
 
-    for(i = 0; i < PPI_REQUIRED_CHANNELS ; i++)
+    for (i = 0; i < PPI_REQUIRED_CHANNELS ; i++)
     {
         err_code = nrf_drv_ppi_channel_alloc(&m_ppi_channels[i]);
         if (NRF_SUCCESS != err_code)
@@ -296,7 +296,7 @@ static ret_code_t ppi_init(void)
        return NRF_ERROR_INTERNAL;
     }
 
-    for(i = 0; i < PPI_REQUIRED_CHANNELS ; i++)
+    for (i = 0; i < PPI_REQUIRED_CHANNELS ; i++)
     {
         err_code = nrf_drv_ppi_channel_enable(m_ppi_channels[i]);
         if (NRF_SUCCESS != err_code)
@@ -335,7 +335,7 @@ static ret_code_t comp_init(void)
     m_comp_config.isource = NRF_COMP_ISOURCE_Ien10uA;
 
     err_code = nrf_drv_comp_init(&m_comp_config, comp_event_handler);
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return NRF_ERROR_INTERNAL;
     }
@@ -351,7 +351,7 @@ static ret_code_t comp_init(void)
  *
  * @param[in] p_event                Pointer to analog-to-digital converter driver event.
  */
-void adc_handler(nrf_drv_adc_evt_t const * p_event)
+void adc_handler(nrfx_adc_evt_t const * p_event)
 {
     nrf_gpio_pin_set(m_csense.output_pin);
     uint16_t val;
@@ -370,9 +370,9 @@ static ret_code_t adc_init(void)
 
     adc_channel.config.config.input = NRF_ADC_CONFIG_SCALING_INPUT_ONE_THIRD;
 
-    nrf_drv_adc_config_t adc_config = NRF_DRV_ADC_DEFAULT_CONFIG;
-    err_code = nrf_drv_adc_init(&adc_config, adc_handler);
-    if(err_code != NRF_SUCCESS)
+    nrfx_adc_config_t const adc_config = NRFX_ADC_DEFAULT_CONFIG;
+    err_code = nrfx_adc_init(&adc_config, adc_handler);
+    if (err_code != NRF_SUCCESS)
     {
         return NRF_ERROR_INTERNAL;
     }
@@ -437,17 +437,17 @@ static ret_code_t saadc_init(void)
 
 ret_code_t nrf_drv_csense_init(nrf_drv_csense_config_t const * p_config, nrf_drv_csense_event_handler_t event_handler)
 {
-    ASSERT(m_csense.module_state == NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_csense.module_state == NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_config->output_pin <= NUMBER_OF_PINS);
 
     ret_code_t err_code;
 
-    if(p_config == NULL)
+    if (p_config == NULL)
     {
         return NRF_ERROR_INVALID_PARAM;
     }
 
-    if(event_handler == NULL)
+    if (event_handler == NULL)
     {
         return NRF_ERROR_INVALID_PARAM;
     }
@@ -464,44 +464,44 @@ ret_code_t nrf_drv_csense_init(nrf_drv_csense_config_t const * p_config, nrf_drv
 
 #if USE_COMP
     err_code = comp_init();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
     err_code = timer_init();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
     err_code = ppi_init();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
 #else
 #ifdef ADC_PRESENT
     err_code = adc_init();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
 #elif defined(SAADC_PRESENT)
     err_code = saadc_init();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
 #endif //ADC_PRESENT
 #endif //USE_COMP
 
-    m_csense.module_state = NRF_DRV_STATE_INITIALIZED;
+    m_csense.module_state = NRFX_DRV_STATE_INITIALIZED;
 
     return NRF_SUCCESS;
 }
 
 ret_code_t nrf_drv_csense_uninit(void)
 {
-    ASSERT(m_csense.module_state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_csense.module_state != NRFX_DRV_STATE_UNINITIALIZED);
 
     nrf_drv_csense_channels_disable(0xFF);
 
@@ -512,28 +512,28 @@ ret_code_t nrf_drv_csense_uninit(void)
     nrf_drv_timer_uninit(&m_timer0);
     nrf_drv_timer_uninit(&m_timer1);
     nrf_drv_comp_uninit();
-    for(i =0; i < 3; i++)
+    for (i =0; i < 3; i++)
     {
         err_code = nrf_drv_ppi_channel_free(m_ppi_channels[i]);
-        if(err_code != NRF_SUCCESS)
+        if (err_code != NRF_SUCCESS)
         {
             return err_code;
         }
     }
     err_code = nrf_drv_ppi_uninit();
-    if(err_code != NRF_SUCCESS)
+    if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
 #else
 #ifdef ADC_PRESENT
-    nrf_drv_adc_uninit();
+    nrfx_adc_uninit();
 #elif defined(SAADC_PRESENT)
     nrf_drv_saadc_uninit();
 #endif //ADC_PRESENT
 #endif //USE_COMP
 
-    m_csense.module_state = NRF_DRV_STATE_UNINITIALIZED;
+    m_csense.module_state = NRFX_DRV_STATE_UNINITIALIZED;
 
     memset((void*)&m_csense, 0, sizeof(m_csense));
 
@@ -542,11 +542,11 @@ ret_code_t nrf_drv_csense_uninit(void)
 
 void nrf_drv_csense_channels_enable(uint8_t channels_mask)
 {
-    ASSERT(m_csense.module_state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(m_csense.module_state != NRFX_DRV_STATE_UNINITIALIZED);
 
     m_csense.busy = true;
 
-    m_csense.module_state = NRF_DRV_STATE_POWERED_ON;
+    m_csense.module_state = NRFX_DRV_STATE_POWERED_ON;
 
     m_csense.adc_channels_input_mask |= channels_mask;
 
@@ -555,13 +555,13 @@ void nrf_drv_csense_channels_enable(uint8_t channels_mask)
 
 void nrf_drv_csense_channels_disable(uint8_t channels_mask)
 {
-    ASSERT(m_csense.module_state == NRF_DRV_STATE_POWERED_ON);
+    ASSERT(m_csense.module_state == NRFX_DRV_STATE_POWERED_ON);
 
     m_csense.adc_channels_input_mask &= ~channels_mask;
 
-    if(m_csense.adc_channels_input_mask == 0)
+    if (m_csense.adc_channels_input_mask == 0)
     {
-        m_csense.module_state = NRF_DRV_STATE_INITIALIZED;
+        m_csense.module_state = NRFX_DRV_STATE_INITIALIZED;
     }
 }
 
@@ -572,16 +572,16 @@ uint16_t nrf_drv_csense_channel_read(uint8_t csense_channel)
 
 ret_code_t nrf_drv_csense_sample(void)
 {
-    ASSERT(m_csense.module_state == NRF_DRV_STATE_POWERED_ON);
+    ASSERT(m_csense.module_state == NRFX_DRV_STATE_POWERED_ON);
 
-    if(m_csense.adc_channels_input_mask != 0)
+    if (m_csense.adc_channels_input_mask != 0)
     {
-        if(m_csense.channels_to_read == 0)
+        if (m_csense.channels_to_read == 0)
         {
 #if USE_COMP == 0 && defined(SAADC_PRESENT)
             nrf_saadc_enable();
 #endif
-            if(nrf_drv_csense_is_busy() == true)
+            if (nrf_drv_csense_is_busy() == true)
             {
                 return NRF_ERROR_BUSY;
             }
@@ -609,14 +609,14 @@ ret_code_t nrf_drv_csense_sample(void)
 #ifdef ADC_PRESENT
         adc_channel.config.config.ain = (nrf_adc_config_input_t)(1<<m_csense.cur_chann_idx);
         nrf_gpio_pin_clear(m_csense.output_pin);
-        err_code = nrf_drv_adc_sample_convert(&adc_channel, NULL);
+        err_code = nrfx_adc_sample_convert(&adc_channel, NULL);
 #elif defined(SAADC_PRESENT)
         saadc_channel.pin_p = (nrf_saadc_input_t)(m_csense.cur_chann_idx + 1);
         nrf_saadc_channel_input_set(0, saadc_channel.pin_p, NRF_SAADC_INPUT_DISABLED);
         nrf_gpio_pin_clear(m_csense.output_pin);
         err_code = nrf_drv_saadc_sample();
 #endif //ADC_PRESENT
-        if(err_code != NRF_SUCCESS)
+        if (err_code != NRF_SUCCESS)
         {
             return err_code;
         }

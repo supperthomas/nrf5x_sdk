@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef NFC_BLE_PAIR_MSG_H__
 #define NFC_BLE_PAIR_MSG_H__
@@ -193,10 +193,10 @@ ret_code_t nfc_ble_pair_default_msg_encode(nfc_ble_pair_type_t             nfc_b
 /** @brief Function for encoding any type of BLE pairing messages with default BLE
  *         advertising data structures and with TK modifier feature.
  *
- *         This function is very similar to @ref nfc_ble_pair_default_msg_encode function, but
- *         additionaly it enables to track TK locations which were encoded in Connection Handover
- *         NDEF message. After using this function, you can update TK value in NDEF by calling
- *         @ref nfc_tk_group_modifier_update.
+ * This function is very similar to the @ref nfc_ble_pair_default_msg_encode function, but
+ * additionaly enables tracking of TK locations which were encoded in the Connection Handover
+ * NDEF message. After using this function, you can update the TK value in NDEF by calling
+ * @ref nfc_tk_group_modifier_update.
  *
  * @param[in]       nfc_ble_pair_type   Type of BLE pairing message.
  * @param[in]       p_tk_value          Pointer to the authentication Temporary Key (TK). If NULL,
@@ -250,13 +250,13 @@ ret_code_t nfc_tk_to_group_add(uint8_t * p_tk_location);
  *
  * @details Updates LESC Confirmation and Random Values based on its locations set by the @ref nfc_lesc_pos_set function.
  *
- * @param[in]  ble_lesc_oob_data        Pointer to the new LESC OOB data. The NDEF message will be updated with this data.
+ * @param[in]  p_ble_lesc_oob_data      Pointer to the new LESC OOB data. The NDEF message will be updated with this data.
  *
  * @retval     NRF_SUCCESS              If the operation was successful.
  * @retval     NRF_ERROR_NULL           If pointer to the new LESC OOB data is NULL.
  * @retval     NRF_ERROR_INVALID_STATE  If pointer to the LESC OOB data location in NDEF message is NULL.
  */
-ret_code_t nfc_lesc_data_update(ble_gap_lesc_oob_data_t * ble_lesc_oob_data);
+ret_code_t nfc_lesc_data_update(ble_gap_lesc_oob_data_t * p_ble_lesc_oob_data);
 
 /**@brief Function for storing pointers to the LESC OOB data inside NDEF message.
  *

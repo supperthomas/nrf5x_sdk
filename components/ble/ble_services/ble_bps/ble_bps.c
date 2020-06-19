@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,24 +35,24 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /* Attention!
-*  To maintain compliance with Nordic Semiconductor ASA's Bluetooth profile
-*  qualification listings, this section of source code must not be modified.
-*/
+ * To maintain compliance with Nordic Semiconductor ASA's Bluetooth profile
+ * qualification listings, this section of source code must not be modified.
+ */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(BLE_BPS)
 #include "ble_bps.h"
+#include "ble_err.h"
 #include <string.h>
 #include "nordic_common.h"
-#include "ble_l2cap.h"
 #include "ble_srv_common.h"
 
 
-#define OPCODE_LENGTH 1     /**< Length of opcode inside Blood Pressure Measurement packet. */
-#define HANDLE_LENGTH 2     /**< Length of handle inside Blood Pressure Measurement packet. */
-#define MAX_BPM_LEN   (BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH)    /**< Maximum size of a transmitted Blood Pressure Measurement. */
+#define OPCODE_LENGTH   1     /**< Length of opcode inside Blood Pressure Measurement packet. */
+#define HANDLE_LENGTH   2     /**< Length of handle inside Blood Pressure Measurement packet. */
+#define MAX_BPM_LEN     (BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH)    /**< Maximum size of a transmitted Blood Pressure Measurement. */
 
 // Blood Pressure Measurement Flags bits
 #define BPS_MEAS_BLOOD_PRESSURE_UNITS_FLAG_BIT (0x01 << 0)  /**< Blood Pressure Units Flag bit. */
@@ -62,14 +62,44 @@
 #define BPS_MEAS_MEASUREMENT_STATUS_FLAG_BIT   (0x01 << 4)  /**< Measurement Status Flag bit. */
 
 
+/**@brief Function for interception of GATT errors and @ref nrf_ble_gq errors.
+ *
+ * @param[in] nrf_error   Error code.
+ * @param[in] p_ctx       Parameter from the event handler.
+ * @param[in] conn_handle Connection handle.
+ */
+static void gatt_error_handler(uint32_t   nrf_error,
+                               void     * p_ctx,
+                               uint16_t   conn_handle)
+{
+    ble_bps_t * p_bps = (ble_bps_t *)p_ctx;
+
+    if (p_bps->error_handler != NULL)
+    {
+        p_bps->error_handler(nrf_error);
+    }
+}
+
+
 /**@brief Function for handling the Connect event.
  *
  * @param[in]   p_bps       Blood Pressure Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_connect(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
+static void on_connect(ble_bps_t * p_bps, ble_evt_t const * p_ble_evt)
 {
-    p_bps->conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
+    ret_code_t err_code;
+
+    p_bps->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+
+    err_code = nrf_ble_gq_conn_handle_register(p_bps->p_gatt_queue, 
+                                               p_ble_evt->evt.gap_evt.conn_handle);
+
+    if ((p_bps->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS))
+    {
+        p_bps->error_handler(err_code);
+    }
 }
 
 
@@ -78,7 +108,7 @@ static void on_connect(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
  * @param[in]   p_bps       Blood Pressure Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_disconnect(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
+static void on_disconnect(ble_bps_t * p_bps, ble_evt_t const * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_bps->conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -90,7 +120,7 @@ static void on_disconnect(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
  * @param[in]   p_bps         Blood Pressure Service structure.
  * @param[in]   p_evt_write   Write event received from the BLE stack.
  */
-static void on_cccd_write(ble_bps_t * p_bps, ble_gatts_evt_write_t * p_evt_write)
+static void on_cccd_write(ble_bps_t * p_bps, ble_gatts_evt_write_t const * p_evt_write)
 {
     if (p_evt_write->len == 2)
     {
@@ -119,9 +149,9 @@ static void on_cccd_write(ble_bps_t * p_bps, ble_gatts_evt_write_t * p_evt_write
  * @param[in]   p_bps       Blood Pressure Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_write(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
+static void on_write(ble_bps_t * p_bps, ble_evt_t const * p_ble_evt)
 {
-    ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
+    ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
     if (p_evt_write->handle == p_bps->meas_handles.cccd_handle)
     {
@@ -137,9 +167,9 @@ static void on_write(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
  * @param[in]   p_bps       Blood Pressure Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_hvc(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
+static void on_hvc(ble_bps_t * p_bps, ble_evt_t const * p_ble_evt)
 {
-    ble_gatts_evt_hvc_t * p_hvc = &p_ble_evt->evt.gatts_evt.params.hvc;
+    ble_gatts_evt_hvc_t const * p_hvc = &p_ble_evt->evt.gatts_evt.params.hvc;
 
     if (p_hvc->handle == p_bps->meas_handles.value_handle)
     {
@@ -151,8 +181,10 @@ static void on_hvc(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
 }
 
 
-void ble_bps_on_ble_evt(ble_bps_t * p_bps, ble_evt_t * p_ble_evt)
+void ble_bps_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
+    ble_bps_t * p_bps = (ble_bps_t *)p_context;
+
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
@@ -253,129 +285,25 @@ static uint8_t bps_measurement_encode(ble_bps_t      * p_bps,
 }
 
 
-/**@brief Function for adding Blood Pressure Measurement characteristics.
- *
- * @param[in]   p_bps        Blood Pressure Service structure.
- * @param[in]   p_bps_init   Information needed to initialize the service.
- *
- * @return      NRF_SUCCESS on success, otherwise an error code.
- */
-static uint32_t bps_measurement_char_add(ble_bps_t * p_bps, const ble_bps_init_t * p_bps_init)
+uint32_t ble_bps_init(ble_bps_t * p_bps, ble_bps_init_t const * p_bps_init)
 {
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_md_t cccd_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
-    ble_bps_meas_t      initial_bpm;
-    uint8_t             encoded_bpm[MAX_BPM_LEN];
+    VERIFY_PARAM_NOT_NULL(p_bps);
+    VERIFY_PARAM_NOT_NULL(p_bps_init);
+    VERIFY_PARAM_NOT_NULL(p_bps_init->p_gatt_queue);
 
-    memset(&cccd_md, 0, sizeof(cccd_md));
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.read_perm);
-    cccd_md.vloc = BLE_GATTS_VLOC_STACK;
-    cccd_md.write_perm = p_bps_init->bps_meas_attr_md.cccd_write_perm;
-
-    memset(&char_md, 0, sizeof(char_md));
-
-    char_md.char_props.indicate = 1;
-    char_md.p_char_user_desc    = NULL;
-    char_md.p_char_pf           = NULL;
-    char_md.p_user_desc_md      = NULL;
-    char_md.p_cccd_md           = &cccd_md;
-    char_md.p_sccd_md           = NULL;
-
-    BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_BLOOD_PRESSURE_MEASUREMENT_CHAR);
-
-    memset(&attr_md, 0, sizeof(attr_md));
-
-    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md.read_perm  = p_bps_init->bps_meas_attr_md.read_perm;
-    attr_md.write_perm = p_bps_init->bps_meas_attr_md.write_perm;
-    attr_md.rd_auth    = 0;
-    attr_md.wr_auth    = 0;
-    attr_md.vlen       = 1;
-
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-    memset(&initial_bpm, 0, sizeof(initial_bpm));
-
-    attr_char_value.p_uuid    = &ble_uuid;
-    attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = bps_measurement_encode(p_bps, &initial_bpm, encoded_bpm);
-    attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = MAX_BPM_LEN;
-    attr_char_value.p_value   = encoded_bpm;
-
-    return sd_ble_gatts_characteristic_add(p_bps->service_handle,
-                                           &char_md,
-                                           &attr_char_value,
-                                           &p_bps->meas_handles);
-}
-
-
-/**@brief Function for adding Blood Pressure Feature characteristics.
- *
- * @param[in]   p_bps        Blood Pressure Service structure.
- * @param[in]   p_bps_init   Information needed to initialize the service.
- *
- * @return      NRF_SUCCESS on success, otherwise an error code.
- */
-static uint32_t bps_feature_char_add(ble_bps_t * p_bps, const ble_bps_init_t * p_bps_init)
-{
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
-    uint8_t             init_value_encoded[2];
-    uint8_t             init_value_len;
-
-    memset(&char_md, 0, sizeof(char_md));
-
-    char_md.char_props.read  = 1;
-    char_md.p_char_user_desc = NULL;
-    char_md.p_char_pf        = NULL;
-    char_md.p_user_desc_md   = NULL;
-    char_md.p_cccd_md        = NULL;
-    char_md.p_sccd_md        = NULL;
-
-    BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_BLOOD_PRESSURE_FEATURE_CHAR);
-
-    memset(&attr_md, 0, sizeof(attr_md));
-
-    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md.read_perm  = p_bps_init->bps_feature_attr_md.read_perm;
-    attr_md.write_perm = p_bps_init->bps_feature_attr_md.write_perm;
-    attr_md.rd_auth    = 0;
-    attr_md.wr_auth    = 0;
-    attr_md.vlen       = 0;
-
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-
-    init_value_len = uint16_encode(p_bps_init->feature, init_value_encoded);
-
-    attr_char_value.p_uuid       = &ble_uuid;
-    attr_char_value.p_attr_md    = &attr_md;
-    attr_char_value.init_len     = init_value_len;
-    attr_char_value.init_offs    = 0;
-    attr_char_value.max_len      = init_value_len;
-    attr_char_value.p_value      = init_value_encoded;
-
-    return sd_ble_gatts_characteristic_add(p_bps->service_handle,
-                                           &char_md,
-                                           &attr_char_value,
-                                           &p_bps->feature_handles);
-}
-
-
-uint32_t ble_bps_init(ble_bps_t * p_bps, const ble_bps_init_t * p_bps_init)
-{
-    uint32_t   err_code;
-    ble_uuid_t ble_uuid;
+    uint32_t              err_code;
+    uint8_t               init_value_encoded[MAX_BPM_LEN];
+    uint8_t               initial_feature_len;
+    ble_bps_meas_t        initial_bpm;
+    ble_uuid_t            ble_uuid;
+    ble_add_char_params_t add_char_params;
 
     // Initialize service structure
-    p_bps->evt_handler = p_bps_init->evt_handler;
-    p_bps->conn_handle = BLE_CONN_HANDLE_INVALID;
-    p_bps->feature     = p_bps_init->feature;
+    p_bps->evt_handler   = p_bps_init->evt_handler;
+    p_bps->error_handler = p_bps_init->error_handler;
+    p_bps->p_gatt_queue  = p_bps_init->p_gatt_queue;
+    p_bps->conn_handle   = BLE_CONN_HANDLE_INVALID;
+    p_bps->feature       = p_bps_init->feature;
 
     // Add service
     BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_BLOOD_PRESSURE_SERVICE);
@@ -387,14 +315,36 @@ uint32_t ble_bps_init(ble_bps_t * p_bps, const ble_bps_init_t * p_bps_init)
     }
 
     // Add measurement characteristic
-    err_code = bps_measurement_char_add(p_bps, p_bps_init);
+    memset(&initial_bpm, 0, sizeof(initial_bpm));
+    memset(&add_char_params, 0, sizeof(add_char_params));
+
+    add_char_params.uuid                = BLE_UUID_BLOOD_PRESSURE_MEASUREMENT_CHAR;
+    add_char_params.max_len             = MAX_BPM_LEN;
+    add_char_params.is_var_len          = true;
+    add_char_params.init_len            = bps_measurement_encode(p_bps, &initial_bpm, init_value_encoded);
+    add_char_params.p_init_value        = init_value_encoded;
+    add_char_params.char_props.indicate = 1;
+    add_char_params.cccd_write_access   = p_bps_init->bp_cccd_wr_sec;
+
+    err_code = characteristic_add(p_bps->service_handle, &add_char_params, &p_bps->meas_handles);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
 
     // Add feature characteristic
-    err_code = bps_feature_char_add(p_bps, p_bps_init);
+    initial_feature_len = uint16_encode(p_bps_init->feature, init_value_encoded);
+
+    memset(&add_char_params, 0, sizeof(add_char_params));
+
+    add_char_params.uuid            = BLE_UUID_BLOOD_PRESSURE_FEATURE_CHAR;
+    add_char_params.max_len         = initial_feature_len;
+    add_char_params.init_len        = initial_feature_len;
+    add_char_params.p_init_value    = init_value_encoded;
+    add_char_params.char_props.read = 1;
+    add_char_params.read_access     = p_bps_init->bp_feature_rd_sec;
+
+    err_code = characteristic_add(p_bps->service_handle, &add_char_params, &p_bps->feature_handles);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
@@ -413,25 +363,22 @@ uint32_t ble_bps_measurement_send(ble_bps_t * p_bps, ble_bps_meas_t * p_bps_meas
     {
         uint8_t                encoded_bps_meas[MAX_BPM_LEN];
         uint16_t               len;
-        uint16_t               hvx_len;
-        ble_gatts_hvx_params_t hvx_params;
+        nrf_ble_gq_req_t       bps_req;
 
         len     = bps_measurement_encode(p_bps, p_bps_meas, encoded_bps_meas);
-        hvx_len = len;
 
-        memset(&hvx_params, 0, sizeof(hvx_params));
+        memset(&bps_req, 0, sizeof(nrf_ble_gq_req_t));
 
-        hvx_params.handle = p_bps->meas_handles.value_handle;
-        hvx_params.type   = BLE_GATT_HVX_INDICATION;
-        hvx_params.offset = 0;
-        hvx_params.p_len  = &hvx_len;
-        hvx_params.p_data = encoded_bps_meas;
+        bps_req.type                               = NRF_BLE_GQ_REQ_GATTS_HVX;
+        bps_req.error_handler.cb                   = gatt_error_handler;
+        bps_req.error_handler.p_ctx                = p_bps;
+        bps_req.params.gatts_hvx.handle  = p_bps->meas_handles.value_handle;
+        bps_req.params.gatts_hvx.offset  = 0;
+        bps_req.params.gatts_hvx.p_data  = encoded_bps_meas;
+        bps_req.params.gatts_hvx.p_len   = &len;
+        bps_req.params.gatts_hvx.type    = BLE_GATT_HVX_INDICATION;
 
-        err_code = sd_ble_gatts_hvx(p_bps->conn_handle, &hvx_params);
-        if ((err_code == NRF_SUCCESS) && (hvx_len != len))
-        {
-            err_code = NRF_ERROR_DATA_SIZE;
-        }
+        err_code = nrf_ble_gq_item_add(p_bps->p_gatt_queue, &bps_req, p_bps->conn_handle);
     }
     else
     {

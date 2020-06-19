@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2009 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2009 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /**
  * @file
@@ -57,6 +57,7 @@
 
 
 //lint -esym(40, GZP_PARAMS_STORAGE_ADR) "Undeclared identifier"
+#define GZP_PARAMS_DB_ADR GZP_PARAMS_STORAGE_ADR    // Address of the GZP parameters flash page.
 
 
 /******************************************************************************/
@@ -241,6 +242,41 @@ static bool gzp_encrypted_user_data[GZP_ENCRYPTED_USER_DATA_MAX_LENGTH]; ///< Pl
 static uint8_t gzp_encrypted_user_data_length;                           ///< Length of gzp_encrypted_user_data. Zero implies no data received.
 
 static nrf_gzll_host_rx_info_t prev_gzp_rx_info = {0, 0};                ///< RSSI and status of ACK payload transmission of previous Gazell packet.
+
+// Define Macro to make array initialization nicer
+#define REP4(X) X X X X
+
+#if defined(__ICCARM__)
+  #if GZP_PARAMS_DB_ADR == 0x1000
+    static const uint32_t database[GZP_DEVICE_PARAMS_STORAGE_SIZE/4] @ "gzp_dev_data"
+  #elif GZP_PARAMS_DB_ADR == 0x15000
+    static const uint32_t database[GZP_DEVICE_PARAMS_STORAGE_SIZE/4] @ "gzp_dev_data_sd"
+  #else
+    #error
+  #endif
+#elif defined(__GNUC__)
+static const uint32_t database[GZP_DEVICE_PARAMS_STORAGE_SIZE / 4] __attribute__((section(".gzll_paring")))
+#else
+static const uint32_t database[GZP_DEVICE_PARAMS_STORAGE_SIZE / 4] __attribute__((at(GZP_PARAMS_DB_ADR)))
+#endif
+= {
+    #define STATIC_INIT_VALUE    0xFFFFFFFF
+    #define STATIC_INIT_COUNT    (GZP_DEVICE_PARAMS_STORAGE_SIZE / 4)
+    #define INIT_1 STATIC_INIT_VALUE,
+    #define INIT_4 REP4(INIT_1)
+    #define INIT_16 REP4(INIT_4)
+    #define INIT_64 REP4(INIT_16)
+    #define INIT_256 REP4(INIT_64)
+    #define INIT_1024 REP4(INIT_256)
+
+    #if (STATIC_INIT_COUNT == 256)
+        INIT_256
+    #elif (STATIC_INIT_COUNT == 1024)
+        INIT_1024
+    #else
+        #error Gazell Pairing Library database not initialized properly!
+    #endif
+}; ///< Database for storing keys.
 
 /** @} */
 
@@ -568,7 +604,7 @@ static void gzp_get_session_counter(uint8_t* dst)
 
 static void gzp_set_host_id(const uint8_t* src)
 {
-  if (*((uint8_t*)GZP_PARAMS_STORAGE_ADR) == 0xff)
+  if (*((uint8_t*)database) == 0xff)
   {
     nrf_nvmc_write_bytes(GZP_PARAMS_STORAGE_ADR + 1, src, GZP_HOST_ID_LENGTH);
     nrf_nvmc_write_byte(GZP_PARAMS_STORAGE_ADR, 0x00);

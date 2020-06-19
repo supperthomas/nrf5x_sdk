@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2013 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2013 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef BLE_APP_H__
 #define BLE_APP_H__
@@ -266,9 +266,9 @@ uint32_t ble_version_get_req_enc(ble_version_t const * const p_version,
  *
  * @sa @ref ble_version_get_req_enc for command request encoder.
  *
- * @param[in] p_buf        		Pointer to the beginning of a command response packet.
- * @param[in] packet_len   	 	Length (in bytes) of the response packet.
- * @param[out] p_version    	Pointer to a @ref ble_version_t where the decoded version will be stored.
+ * @param[in] p_buf             Pointer to the beginning of a command response packet.
+ * @param[in] packet_len        Length (in bytes) of the response packet.
+ * @param[out] p_version        Pointer to a @ref ble_version_t where the decoded version will be stored.
  * @param[out] p_result_code    Command result code.
  *
  * @retval NRF_SUCCESS              Version information stored successfully.
@@ -322,10 +322,10 @@ uint32_t ble_opt_set_rsp_dec(uint8_t const * const p_buf,
  *
  * @sa @ref ble_enable_rsp_dec for command response decoder.
  *
- * @param[in] p_ble_enable_params       Pointer to the @ref ble_enable_params_t structure.
- * @param[in] p_buf          			Pointer to the buffer where encoded data command will be returned.
- * @param[in,out] p_buf_len  			\c in: Size of \p p_buf buffer.
- *                           			\c out: Length of the encoded command packet.
+ * @param[in] p_ble_enable_params     Pointer to the @ref ble_enable_params_t structure.
+ * @param[in] p_buf                   Pointer to the buffer where encoded data command will be returned.
+ * @param[in,out] p_buf_len           \c in: Size of \p p_buf buffer.
+ *                                    \c out: Length of the encoded command packet.
  *
  * @retval NRF_SUCCESS                Encoding success.
  * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
@@ -392,10 +392,10 @@ uint32_t ble_opt_get_req_enc(uint32_t                opt_id,
  *
  * @sa @ref ble_opt_get_req_enc for command request encoder.
  *
- * @param[in] p_buf       		  Pointer to the beginning of a command response packet.
- * @param[in] packet_len  		  Length (in bytes) of the response packet.
- * @param[out] p_opt_id  		  Pointer to the decoded opt_id.
- * @param[out] p_opt       	 	  Pointer to the decoded @ref ble_opt_t union.
+ * @param[in] p_buf               Pointer to the beginning of a command response packet.
+ * @param[in] packet_len          Length (in bytes) of the response packet.
+ * @param[out] p_opt_id           Pointer to the decoded opt_id.
+ * @param[out] p_opt              Pointer to the decoded @ref ble_opt_t union.
  * @param[out] p_result_code      Command result code.
  *
  * @retval NRF_SUCCESS              Opt stored successfully.
@@ -435,8 +435,8 @@ uint32_t ble_user_mem_reply_req_enc(uint16_t                     conn_handle,
  *
  * @sa @ref ble_user_mem_reply_req_enc for command request encoder.
  *
- * @param[in] p_buf        			Pointer to the beginning of a command response packet.
- * @param[in] packet_len   			Length (in bytes) of the response packet.
+ * @param[in] p_buf                 Pointer to the beginning of a command response packet.
+ * @param[in] packet_len            Length (in bytes) of the response packet.
  * @param[out] p_result_code        Command result code.
  *
  * @retval NRF_SUCCESS              Opt stored successfully.

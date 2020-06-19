@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2013 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2013 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,15 +35,17 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble_gap_conn.h"
 #include <string.h>
 #include "ble_serialization.h"
 #include "cond_field_serialization.h"
 #include "ble_gap_struct_serialization.h"
+#include "ble_struct_serialization.h"
 #include "app_util.h"
 
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 6
 uint32_t ble_gap_adv_data_set_req_dec(uint8_t const * const p_buf,
                                       uint32_t              packet_len,
                                       uint8_t * * const     pp_data,
@@ -68,22 +70,30 @@ uint32_t ble_gap_adv_data_set_rsp_enc(uint32_t         return_code,
 {
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_ADV_DATA_SET);
 }
+#endif
 
 uint32_t ble_gap_adv_start_req_dec(uint8_t const * const          p_buf,
                                    uint32_t                       packet_len,
+#if NRF_SD_BLE_API_VERSION > 5
+                                   uint8_t *                     p_adv_handle
+#else
                                    ble_gap_adv_params_t * * const pp_adv_params
+#endif
 #if NRF_SD_BLE_API_VERSION >= 4
                                    ,uint8_t *                     p_conn_cfg_tag
 #endif
                                    )
 {
     SER_REQ_DEC_BEGIN(SD_BLE_GAP_ADV_START);
-
+#if NRF_SD_BLE_API_VERSION > 5
+    SER_PULL_uint8(p_adv_handle);
+#else
     SER_ASSERT_NOT_NULL(pp_adv_params);
     SER_ASSERT_NOT_NULL(*pp_adv_params);
     SER_ASSERT_NOT_NULL((*pp_adv_params)->p_peer_addr);
 
     SER_PULL_COND(pp_adv_params, ble_gap_adv_params_t_dec);
+#endif
 #if NRF_SD_BLE_API_VERSION >= 4
     SER_PULL_uint8(p_conn_cfg_tag);
 #endif
@@ -93,11 +103,24 @@ uint32_t ble_gap_adv_start_req_dec(uint8_t const * const          p_buf,
 
 uint32_t ble_gap_adv_start_rsp_enc(uint32_t         return_code,
                                    uint8_t * const  p_buf,
-                                   uint32_t * const p_buf_len)
+                                   uint32_t * const p_buf_len
+                                   )
 {
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_ADV_START);
 }
 
+#if NRF_SD_BLE_API_VERSION > 5
+uint32_t ble_gap_adv_stop_req_dec(uint8_t const * const p_buf,
+                                  uint16_t              packet_len,
+                                  uint8_t *             p_adv_handle)
+{
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_ADV_STOP);
+
+    SER_PULL_uint8(p_adv_handle);
+
+    SER_REQ_DEC_END;
+}
+#endif
 
 uint32_t ble_gap_adv_stop_rsp_enc(uint32_t         return_code,
                                   uint8_t * const  p_buf,
@@ -270,48 +293,6 @@ uint32_t ble_gap_conn_sec_get_rsp_enc(uint32_t                   return_code,
     SER_RSP_ENC_END;
 }
 
-uint32_t ble_gap_connect_req_dec(uint8_t const * const           p_buf,
-                                 uint32_t                        packet_len,
-                                 ble_gap_addr_t * * const        pp_addr,
-                                 ble_gap_scan_params_t * * const pp_scan_params,
-                                 ble_gap_conn_params_t * * const pp_conn_params
-#if NRF_SD_BLE_API_VERSION >= 4
-                                 ,uint8_t *                      p_conn_cfg_tag
-#endif
-                                )
-{
-    SER_REQ_DEC_BEGIN(SD_BLE_GAP_CONNECT);
-
-    SER_ASSERT_NOT_NULL(pp_addr);
-    SER_ASSERT_NOT_NULL(*pp_addr);
-    SER_ASSERT_NOT_NULL(pp_scan_params);
-    SER_ASSERT_NOT_NULL(*pp_scan_params);
-    SER_ASSERT_NOT_NULL(pp_conn_params);
-    SER_ASSERT_NOT_NULL(*pp_conn_params);
-
-    SER_PULL_COND(pp_addr, ble_gap_addr_t_dec);
-    SER_PULL_COND(pp_scan_params, ble_gap_scan_params_t_dec);
-    SER_PULL_COND(pp_conn_params, ble_gap_conn_params_t_dec);
-#if NRF_SD_BLE_API_VERSION >= 4
-    SER_PULL_uint8(p_conn_cfg_tag);
-#endif
-
-    SER_REQ_DEC_END;
-}
-
-uint32_t ble_gap_connect_rsp_enc(uint32_t         return_code,
-                                 uint8_t * const  p_buf,
-                                 uint32_t * const p_buf_len)
-{
-    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_CONNECT);
-}
-uint32_t ble_gap_connect_cancel_rsp_enc(uint32_t         return_code,
-                                        uint8_t * const  p_buf,
-                                        uint32_t * const p_buf_len)
-{
-    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_CONNECT_CANCEL);
-}
-
 uint32_t ble_gap_device_name_get_req_dec(uint8_t const * const p_buf,
                                          uint32_t              packet_len,
                                          uint8_t * *           pp_name,
@@ -327,21 +308,17 @@ uint32_t ble_gap_device_name_get_req_dec(uint8_t const * const p_buf,
     SER_REQ_DEC_END;
 }
 
-
 uint32_t ble_gap_device_name_get_rsp_enc(uint32_t              return_code,
                                          uint8_t const * const p_dev_name,
                                          uint16_t  *           p_dev_name_len,
+                                         uint16_t              cpy_len,
                                          uint8_t * const       p_buf,
                                          uint32_t * const      p_buf_len)
 {
     SER_RSP_ENC_BEGIN(SD_BLE_GAP_DEVICE_NAME_GET);
 
     SER_PUSH_COND(p_dev_name_len, uint16_t_enc);
-
-    if (p_dev_name_len)
-    {
-        SER_PUSH_uint8array(p_dev_name, *p_dev_name_len);
-    }
+    SER_PUSH_len16data(p_dev_name, cpy_len);
 
     SER_RSP_ENC_END;
 }
@@ -395,6 +372,7 @@ uint32_t ble_gap_disconnect_rsp_enc(uint32_t         return_code,
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_DISCONNECT);
 }
 
+#ifndef S112
 uint32_t ble_gap_encrypt_req_dec(uint8_t        const * const   p_buf,
                                  uint16_t                       packet_len,
                                  uint16_t                     * const p_conn_handle,
@@ -422,6 +400,7 @@ uint32_t ble_gap_encrypt_rsp_enc(uint32_t          return_code,
 {
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_ENCRYPT);
 }
+#endif
 
 uint32_t ble_gap_keypress_notify_req_dec(uint8_t const * const          p_buf,
                                           uint32_t                       packet_len,
@@ -578,7 +557,11 @@ uint32_t ble_gap_ppcp_set_rsp_enc(uint32_t         return_code,
 uint32_t ble_gap_rssi_get_req_dec(uint8_t const * const p_buf,
                                   uint16_t              packet_len,
                                   uint16_t *            p_conn_handle,
-                                  int8_t * * const      pp_rssi)
+                                  int8_t * * const      pp_rssi
+#if NRF_SD_BLE_API_VERSION > 5
+                                  ,uint8_t * * const      pp_ch_index
+#endif
+                                  )
 {
     SER_REQ_DEC_BEGIN(SD_BLE_GAP_RSSI_GET);
 
@@ -588,6 +571,11 @@ uint32_t ble_gap_rssi_get_req_dec(uint8_t const * const p_buf,
 
     SER_PULL_uint16(p_conn_handle);
     SER_PULL_COND(pp_rssi, NULL);
+#if NRF_SD_BLE_API_VERSION > 5
+    SER_ASSERT_NOT_NULL(pp_ch_index);
+    SER_ASSERT_NOT_NULL(*pp_ch_index);
+    SER_PULL_COND(pp_ch_index, NULL);
+#endif
     SER_REQ_DEC_END;
 }
 
@@ -595,11 +583,18 @@ uint32_t ble_gap_rssi_get_req_dec(uint8_t const * const p_buf,
 uint32_t ble_gap_rssi_get_rsp_enc(uint32_t         return_code,
                                   uint8_t * const  p_buf,
                                   uint32_t * const p_buf_len,
-                                  int8_t           rssi)
+                                  int8_t *         p_rssi
+#if NRF_SD_BLE_API_VERSION > 5
+                                  ,uint8_t * p_ch_index
+#endif
+                                  )
 {
     SER_RSP_ENC_BEGIN(SD_BLE_GAP_RSSI_GET);
 
-    SER_PUSH_int8(&rssi);
+    SER_PUSH_COND(p_rssi, uint8_t_enc);
+#if NRF_SD_BLE_API_VERSION > 5
+    SER_PUSH_COND(p_ch_index, uint8_t_enc);
+#endif
 
     SER_RSP_ENC_END;
 }
@@ -649,9 +644,14 @@ uint32_t ble_gap_rssi_stop_rsp_enc(uint32_t         return_code,
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_RSSI_STOP);
 }
 
+#ifndef S112
 uint32_t ble_gap_scan_start_req_dec(uint8_t const * const     p_buf,
                                     uint32_t                  packet_len,
-                                    ble_gap_scan_params_t * * const pp_scan_params)
+                                    ble_gap_scan_params_t * * const pp_scan_params
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+                                    ,ble_data_t * * const pp_adv_report_buffer
+#endif
+                                    )
 {
     SER_REQ_DEC_BEGIN(SD_BLE_GAP_SCAN_START);
 
@@ -659,15 +659,22 @@ uint32_t ble_gap_scan_start_req_dec(uint8_t const * const     p_buf,
     SER_ASSERT_NOT_NULL(*pp_scan_params);
 
     SER_PULL_COND(pp_scan_params, ble_gap_scan_params_t_dec);
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+    SER_PULL_COND(pp_adv_report_buffer, ble_data_t_dec);
+#endif
 
     SER_REQ_DEC_END;
 }
 
 uint32_t ble_gap_scan_start_rsp_enc(uint32_t         return_code,
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+                                    ble_data_t *p_ble_data,
+#endif
                                     uint8_t * const  p_buf,
                                     uint32_t * const p_buf_len)
 {
    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_SCAN_START);
+
 }
 
 uint32_t ble_gap_scan_stop_rsp_enc(uint32_t         return_code,
@@ -676,6 +683,49 @@ uint32_t ble_gap_scan_stop_rsp_enc(uint32_t         return_code,
 {
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_SCAN_STOP);
 }
+
+uint32_t ble_gap_connect_req_dec(uint8_t const * const           p_buf,
+                                 uint32_t                        packet_len,
+                                 ble_gap_addr_t * * const        pp_addr,
+                                 ble_gap_scan_params_t * * const pp_scan_params,
+                                 ble_gap_conn_params_t * * const pp_conn_params
+#if NRF_SD_BLE_API_VERSION >= 4
+                                 ,uint8_t *                      p_conn_cfg_tag
+#endif
+                                )
+{
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_CONNECT);
+
+    SER_ASSERT_NOT_NULL(pp_addr);
+    SER_ASSERT_NOT_NULL(*pp_addr);
+    SER_ASSERT_NOT_NULL(pp_scan_params);
+    SER_ASSERT_NOT_NULL(*pp_scan_params);
+    SER_ASSERT_NOT_NULL(pp_conn_params);
+    SER_ASSERT_NOT_NULL(*pp_conn_params);
+
+    SER_PULL_COND(pp_addr, ble_gap_addr_t_dec);
+    SER_PULL_COND(pp_scan_params, ble_gap_scan_params_t_dec);
+    SER_PULL_COND(pp_conn_params, ble_gap_conn_params_t_dec);
+#if NRF_SD_BLE_API_VERSION >= 4
+    SER_PULL_uint8(p_conn_cfg_tag);
+#endif
+
+    SER_REQ_DEC_END;
+}
+
+uint32_t ble_gap_connect_rsp_enc(uint32_t         return_code,
+                                 uint8_t * const  p_buf,
+                                 uint32_t * const p_buf_len)
+{
+    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_CONNECT);
+}
+uint32_t ble_gap_connect_cancel_rsp_enc(uint32_t         return_code,
+                                        uint8_t * const  p_buf,
+                                        uint32_t * const p_buf_len)
+{
+    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_CONNECT_CANCEL);
+}
+#endif //S112
 
 uint32_t ble_gap_sec_info_reply_req_dec(uint8_t const * const         p_buf,
                                         uint16_t                      packet_len,
@@ -745,11 +795,18 @@ uint32_t ble_gap_sec_params_reply_rsp_enc(uint32_t                     return_co
 
 uint32_t ble_gap_tx_power_set_req_dec(uint8_t const * const p_buf,
                                       uint32_t              packet_len,
+#if NRF_SD_BLE_API_VERSION > 5
+                                      uint8_t * p_role, uint16_t * p_handle,
+#endif
                                       int8_t *              p_tx_power)
 {
     SER_REQ_DEC_BEGIN(SD_BLE_GAP_TX_POWER_SET);
 
     SER_ASSERT_NOT_NULL(p_tx_power);
+#if NRF_SD_BLE_API_VERSION > 5
+    SER_PULL_uint8(p_role);
+    SER_PULL_uint16(p_handle);
+#endif
     SER_PULL_int8(p_tx_power);
 
     SER_REQ_DEC_END;
@@ -929,7 +986,7 @@ uint32_t ble_gap_device_identities_set_rsp_enc(uint32_t         return_code,
     SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_DEVICE_IDENTITIES_SET);
 }
 
-#if NRF_SD_BLE_API_VERSION >= 4
+#if NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
 uint32_t ble_gap_data_length_update_req_dec(uint8_t const * const                      p_buf,
                                             uint16_t                                   packet_len,
                                             uint16_t *                                 p_conn_handle,
@@ -953,14 +1010,15 @@ uint32_t ble_gap_data_length_update_rsp_enc(uint32_t                            
     SER_PUSH_COND(p_dl_limitation, ble_gap_data_length_limitation_t_enc);
     SER_RSP_ENC_END;
 }
-#endif
+#endif //NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
+
 #if NRF_SD_BLE_API_VERSION >= 5
-uint32_t ble_gap_phy_request_req_dec(uint8_t const * const          p_buf,
+uint32_t ble_gap_phy_update_req_dec(uint8_t const * const          p_buf,
                                       uint32_t                       packet_len,
                                       uint16_t * const               p_conn_handle,
                                       ble_gap_phys_t * * const pp_gap_phys)
 {
-    SER_REQ_DEC_BEGIN(SD_BLE_GAP_PHY_REQUEST);
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_PHY_UPDATE);
 
     SER_ASSERT_NOT_NULL(p_conn_handle);
     SER_ASSERT_NOT_NULL(pp_gap_phys);
@@ -972,10 +1030,84 @@ uint32_t ble_gap_phy_request_req_dec(uint8_t const * const          p_buf,
 }
 
 
-uint32_t ble_gap_phy_request_rsp_enc(uint32_t         return_code,
+uint32_t ble_gap_phy_update_rsp_enc(uint32_t         return_code,
                                       uint8_t * const  p_buf,
                                       uint32_t * const p_buf_len)
 {
-    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_PHY_REQUEST);
+    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_PHY_UPDATE);
 }
+#endif //RF_SD_BLE_API_VERSION >= 5
+
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+uint32_t ble_gap_adv_set_configure_req_dec(uint8_t const * const        p_buf,
+                                           uint16_t                     packet_len,
+                                           uint8_t * * const            pp_adv_handle,
+                                           ble_gap_adv_data_t **const   pp_adv_data,
+                                           ble_gap_adv_params_t **const pp_adv_params)
+{
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_ADV_SET_CONFIGURE);
+
+    SER_ASSERT_NOT_NULL(pp_adv_handle);
+    SER_ASSERT_NOT_NULL(*pp_adv_handle);
+    SER_ASSERT_NOT_NULL(pp_adv_data);
+    SER_ASSERT_NOT_NULL(*pp_adv_data);
+    SER_ASSERT_NOT_NULL(pp_adv_params);
+    SER_ASSERT_NOT_NULL(*pp_adv_params);
+
+    SER_PULL_COND(pp_adv_handle, uint8_t_dec);
+    SER_PULL_COND(pp_adv_data, ble_gap_adv_data_t_dec);
+    SER_PULL_COND(pp_adv_params, ble_gap_adv_params_t_dec);
+
+    SER_REQ_DEC_END;
+}
+
+
+uint32_t ble_gap_adv_set_configure_rsp_enc(uint32_t               return_code,
+                                           uint8_t * const        p_buf,
+                                           uint32_t * const       p_buf_len,
+                                           ble_gap_adv_data_t *   p_ble_adv_data,
+                                           uint8_t const * const p_adv_handle)
+{
+    SER_RSP_ENC_BEGIN(SD_BLE_GAP_ADV_SET_CONFIGURE);
+
+    SER_PUSH_COND(p_adv_handle, uint8_t_enc);
+
+    SER_RSP_ENC_END;
+}
+
+#ifndef S112
+uint32_t ble_gap_qos_channel_survey_start_req_dec(uint8_t const * const          p_buf,
+                                                  uint32_t                       packet_len,
+                                                  uint32_t * const               p_interval_us)
+{
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_QOS_CHANNEL_SURVEY_START);
+
+    SER_ASSERT_NOT_NULL(p_interval_us);
+    SER_PULL_uint32(p_interval_us);
+    SER_REQ_DEC_END;
+}
+
+
+uint32_t ble_gap_qos_channel_survey_start_rsp_enc(uint32_t         return_code,
+                                                  uint8_t * const  p_buf,
+                                                  uint32_t * const p_buf_len)
+{
+    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_QOS_CHANNEL_SURVEY_START);
+}
+
+uint32_t ble_gap_qos_channel_survey_stop_req_dec(uint8_t const * const          p_buf,
+                                                 uint32_t                       packet_len)
+{
+    SER_REQ_DEC_BEGIN(SD_BLE_GAP_QOS_CHANNEL_SURVEY_STOP);
+    SER_REQ_DEC_END;
+}
+
+
+uint32_t ble_gap_qos_channel_survey_stop_rsp_enc(uint32_t         return_code,
+                                                 uint8_t * const  p_buf,
+                                                 uint32_t * const p_buf_len)
+{
+    SER_RSP_ENC_RESULT_ONLY(SD_BLE_GAP_QOS_CHANNEL_SURVEY_STOP);
+}
+#endif
 #endif

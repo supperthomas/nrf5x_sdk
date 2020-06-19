@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(ANT_SDM)
@@ -47,7 +47,7 @@
 #include "app_error.h"
 #include "ant_sdm_utils.h"
 
-#define NRF_LOG_MODULE_NAME "ANT_SDM"
+#define NRF_LOG_MODULE_NAME ant_sdm
 #if ANT_SDM_LOG_ENABLED
 #define NRF_LOG_LEVEL       ANT_SDM_LOG_LEVEL
 #define NRF_LOG_INFO_COLOR  ANT_SDM_INFO_COLOR
@@ -55,6 +55,7 @@
 #define NRF_LOG_LEVEL       0
 #endif // ANT_SDM_LOG_ENABLED
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #define COMMON_DATA_INTERVAL 64          /**< Common data page is sent every 65th message. */
 
@@ -86,7 +87,7 @@ static ret_code_t ant_sdm_init(ant_sdm_profile_t          * p_profile,
     p_profile->page_80 = DEFAULT_ANT_COMMON_page80();
     p_profile->page_81 = DEFAULT_ANT_COMMON_page81();
 
-    NRF_LOG_INFO("ANT SDM channel %u init\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT SDM channel %u init", p_profile->channel_number);
     return ant_channel_init(p_channel_config);
 }
 
@@ -139,7 +140,7 @@ ret_code_t ant_sdm_page_request(ant_sdm_profile_t * p_profile, ant_common_page70
 
     uint32_t err_code = ant_request_controller_request(&(p_profile->_cb.p_disp_cb->req_controller),
                                                          p_profile->channel_number, p_page_70);
-    NRF_LOG_INFO("\r\n");
+    NRF_LOG_INFO("");
 
     return err_code;
 }
@@ -200,11 +201,12 @@ static ant_sdm_page_t next_page_number_get(ant_sdm_profile_t * p_profile)
  */
 static void sens_message_encode(ant_sdm_profile_t * p_profile, uint8_t * p_message_payload)
 {
-    ant_sdm_message_layout_t * p_sdm_message_payload = (ant_sdm_message_layout_t *)p_message_payload;
+    ant_sdm_message_layout_t * p_sdm_message_payload =
+        (ant_sdm_message_layout_t *)p_message_payload;
 
     p_sdm_message_payload->page_number = next_page_number_get(p_profile);
 
-    NRF_LOG_INFO("SDM Page number: %u\r\n", p_sdm_message_payload->page_number);
+    NRF_LOG_INFO("SDM Page number: %u", p_sdm_message_payload->page_number);
 
     switch (p_sdm_message_payload->page_number)
     {
@@ -248,19 +250,20 @@ static void sens_message_encode(ant_sdm_profile_t * p_profile, uint8_t * p_messa
     p_profile->evt_handler(p_profile, (ant_sdm_evt_t)p_sdm_message_payload->page_number);
 }
 
-void ant_sdm_sens_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_sdm_sens_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 {
-    ASSERT(p_profile != NULL);
-    ASSERT(p_ant_event != NULL);
+    ASSERT(p_context   != NULL);
+    ASSERT(p_ant_evt != NULL);
+    ant_sdm_profile_t * p_profile = (ant_sdm_profile_t *)p_context;
 
-    if (p_ant_event->channel == p_profile->channel_number)
+    if (p_ant_evt->channel == p_profile->channel_number)
     {
         uint32_t err_code;
         uint8_t p_message_payload[ANT_STANDARD_DATA_PAYLOAD_SIZE];
-        ant_sdm_sens_cb_t * p_sdm_cb   = p_profile->_cb.p_sens_cb;
-        ant_request_controller_sens_evt_handler(&(p_sdm_cb->req_controller), p_ant_event);
+        ant_sdm_sens_cb_t * p_sdm_cb = p_profile->_cb.p_sens_cb;
+        ant_request_controller_sens_evt_handler(&(p_sdm_cb->req_controller), p_ant_evt);
 
-        switch (p_ant_event->event)
+        switch (p_ant_evt->event)
         {
             case EVENT_TX:
             case EVENT_TRANSFER_TX_FAILED:
@@ -268,11 +271,15 @@ void ant_sdm_sens_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_e
                 sens_message_encode(p_profile, p_message_payload);
                 if (ant_request_controller_ack_needed(&(p_sdm_cb->req_controller)))
                 {
-                    err_code = sd_ant_acknowledge_message_tx(p_profile->channel_number, sizeof(p_message_payload), p_message_payload);
+                    err_code = sd_ant_acknowledge_message_tx(p_profile->channel_number,
+                                                             sizeof(p_message_payload),
+                                                             p_message_payload);
                 }
                 else
                 {
-                    err_code = sd_ant_broadcast_message_tx(p_profile->channel_number, sizeof(p_message_payload), p_message_payload);
+                    err_code = sd_ant_broadcast_message_tx(p_profile->channel_number,
+                                                           sizeof(p_message_payload),
+                                                           p_message_payload);
                 }
                 APP_ERROR_CHECK(err_code);
                 break;
@@ -286,7 +293,7 @@ ret_code_t ant_sdm_disp_open(ant_sdm_profile_t * p_profile)
 {
     ASSERT(p_profile != NULL);
 
-    NRF_LOG_INFO("ANT SDM channel %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT SDM channel %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
@@ -301,11 +308,11 @@ ret_code_t ant_sdm_sens_open(ant_sdm_profile_t * p_profile)
     sens_message_encode(p_profile, p_message_payload);
     err_code =
         sd_ant_broadcast_message_tx(p_profile->channel_number,
-                                    sizeof (p_message_payload),
+                                    sizeof(p_message_payload),
                                     p_message_payload);
     APP_ERROR_CHECK(err_code);
 
-    NRF_LOG_INFO("ANT SDM channel %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT SDM channel %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
@@ -316,14 +323,17 @@ ret_code_t ant_sdm_sens_open(ant_sdm_profile_t * p_profile)
  */
 static void disp_message_decode(ant_sdm_profile_t * p_profile, uint8_t * p_message_payload)
 {
-    const ant_sdm_message_layout_t * p_sdm_message_payload  = (ant_sdm_message_layout_t *)p_message_payload;
+    const ant_sdm_message_layout_t * p_sdm_message_payload =
+        (ant_sdm_message_layout_t *)p_message_payload;
 
-    NRF_LOG_INFO("SDM Page number: %u\r\n", p_sdm_message_payload->page_number);
+    NRF_LOG_INFO("SDM Page number: %u", p_sdm_message_payload->page_number);
 
     switch (p_sdm_message_payload->page_number)
     {
         case ANT_SDM_PAGE_1:
-            ant_sdm_page_1_decode(p_sdm_message_payload->page_payload, &(p_profile->page_1), &(p_profile->common));
+            ant_sdm_page_1_decode(p_sdm_message_payload->page_payload,
+                                  &(p_profile->page_1),
+                                  &(p_profile->common));
             ant_sdm_speed_decode(p_sdm_message_payload->page_payload, &(p_profile->common));
             break;
 
@@ -358,17 +368,17 @@ static void disp_message_decode(ant_sdm_profile_t * p_profile, uint8_t * p_messa
     p_profile->evt_handler(p_profile, (ant_sdm_evt_t)p_sdm_message_payload->page_number);
 }
 
-void ant_sdm_disp_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_sdm_disp_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 {
-    ASSERT(p_profile != NULL);
-    ASSERT(p_ant_event != NULL);
+    ASSERT(p_context   != NULL);
+    ASSERT(p_ant_evt != NULL);
+    ant_sdm_profile_t * p_profile = ( ant_sdm_profile_t *)p_context;
 
-    if (p_ant_event->channel == p_profile->channel_number)
+    if (p_ant_evt->channel == p_profile->channel_number)
     {
-        ANT_MESSAGE       * p_message = (ANT_MESSAGE *)p_ant_event->msg.evt_buffer;
-        ant_sdm_disp_cb_t * p_sdm_cb  = p_profile->_cb.p_disp_cb;
+        ant_sdm_disp_cb_t * p_sdm_cb = p_profile->_cb.p_disp_cb;
 
-        switch (ant_request_controller_disp_evt_handler(&(p_sdm_cb->req_controller), p_ant_event))
+        switch (ant_request_controller_disp_evt_handler(&(p_sdm_cb->req_controller), p_ant_evt))
         {
             case ANT_REQUEST_CONTROLLER_SUCCESS:
                 p_profile->evt_handler(p_profile, ANT_SDM_PAGE_REQUEST_SUCCESS);
@@ -380,14 +390,14 @@ void ant_sdm_disp_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_e
                 break;
         }
 
-        switch (p_ant_event->event)
+        switch (p_ant_evt->event)
         {
             case EVENT_RX:
-                if (p_message->ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
-                 || p_message->ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
-                 || p_message->ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
+                if (p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
+                 || p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
+                 || p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
                 {
-                    disp_message_decode(p_profile, p_message->ANT_MESSAGE_aucPayload);
+                    disp_message_decode(p_profile, p_ant_evt->message.ANT_MESSAGE_aucPayload);
                 }
                 break;
             default:

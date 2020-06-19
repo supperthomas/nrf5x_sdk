@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include <stdint.h>
 #include <string.h>
@@ -43,6 +43,7 @@
 #include "ble_srv_common.h"
 #include "cgms_sst.h"
 #include "cgms_socp.h"
+#include "nrf_ble_gq.h"
 
 
 #define NRF_BLE_CGMS_PLUS_INFINTE                     0x07FE
@@ -87,7 +88,7 @@
 #define SOCP_RSP_PROCEDURE_NOT_COMPLETED              0x04
 #define SOCP_RSP_OUT_OF_RANGE                         0x05
 
-static void ble_socp_decode(uint8_t data_len, uint8_t * p_data, ble_cgms_socp_value_t * p_socp_val)
+static void ble_socp_decode(uint8_t data_len, uint8_t const * p_data, ble_cgms_socp_value_t * p_socp_val)
 {
     p_socp_val->opcode      = 0xFF;
     p_socp_val->operand_len = 0;
@@ -100,7 +101,7 @@ static void ble_socp_decode(uint8_t data_len, uint8_t * p_data, ble_cgms_socp_va
     if (data_len > 1)
     {
         p_socp_val->operand_len = data_len - 1;
-        p_socp_val->p_operand   = &p_data[1]; // lint !e416
+        p_socp_val->p_operand   = (uint8_t*)&p_data[1]; // lint !e416
     }
 }
 
@@ -175,59 +176,33 @@ ret_code_t cgms_socp_char_add(nrf_ble_cgms_t * p_cgms)
  */
 static void socp_send(nrf_ble_cgms_t * p_cgms)
 {
-    uint32_t               err_code;
-    uint8_t                encoded_resp[25];
-    uint8_t                len;
-    uint16_t               hvx_len;
-    ble_gatts_hvx_params_t hvx_params;
+    uint32_t         err_code;
+    uint8_t          encoded_resp[25];
+    uint16_t         len;
+    nrf_ble_gq_req_t cgms_req;
+
+    memset(&cgms_req, 0, sizeof(nrf_ble_gq_req_t));
 
     // Send indication
-    len     = ble_socp_encode(&(p_cgms->socp_response), encoded_resp);
-    hvx_len = len;
+    len = ble_socp_encode(&(p_cgms->socp_response), encoded_resp);
 
-    memset(&hvx_params, 0, sizeof(hvx_params));
+    cgms_req.type                               = NRF_BLE_GQ_REQ_GATTS_HVX;
+    cgms_req.error_handler.cb                   = p_cgms->gatt_err_handler;
+    cgms_req.error_handler.p_ctx                = p_cgms;
+    cgms_req.params.gatts_hvx.type    = BLE_GATT_HVX_INDICATION;
+    cgms_req.params.gatts_hvx.handle  = p_cgms->char_handles.socp.value_handle;
+    cgms_req.params.gatts_hvx.offset  = 0;
+    cgms_req.params.gatts_hvx.p_data  = encoded_resp;
+    cgms_req.params.gatts_hvx.p_len   = &len;
 
-    hvx_params.handle = p_cgms->char_handles.socp.value_handle;
-    hvx_params.type   = BLE_GATT_HVX_INDICATION;
-    hvx_params.offset = 0;
-    hvx_params.p_len  = &hvx_len;
-    hvx_params.p_data = encoded_resp;
+    err_code = nrf_ble_gq_item_add(p_cgms->p_gatt_queue, &cgms_req, p_cgms->conn_handle);
 
-    err_code = sd_ble_gatts_hvx(p_cgms->conn_handle, &hvx_params);
-
-    // Error handling
-    if ((err_code == NRF_SUCCESS) && (hvx_len != len))
+    // Report error to application
+    if ((p_cgms->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS) &&
+        (err_code != NRF_ERROR_INVALID_STATE))
     {
-        err_code = NRF_ERROR_DATA_SIZE;
-    }
-
-    switch (err_code)
-    {
-        case NRF_SUCCESS:
-            // Wait for HVC event.
-            p_cgms->cgms_com_state = STATE_SOCP_RESPONSE_IND_VERIF;
-            break;
-
-        case NRF_ERROR_RESOURCES:
-            // Wait for TX_COMPLETE event to retry transmission.
-            p_cgms->cgms_com_state = STATE_SOCP_RESPONSE_PENDING;
-            break;
-
-        case NRF_ERROR_INVALID_STATE:
-            // Make sure state machine returns to the default state.
-            p_cgms->cgms_com_state = STATE_NO_COMM;
-            break;
-
-        default:
-            // Report error to application.
-            if (p_cgms->error_handler != NULL)
-            {
-                p_cgms->error_handler(err_code);
-            }
-
-            // Make sure state machine returns to the default state.
-            p_cgms->cgms_com_state = STATE_NO_COMM;
-            break;
+        p_cgms->error_handler(err_code);
     }
 }
 
@@ -274,7 +249,7 @@ static bool is_feature_present(nrf_ble_cgms_t * p_cgms, uint32_t feature)
  * @param[in]   p_cgms        Service instance.
  * @param[in]   p_evt_write   WRITE event to be handled.
  */
-void on_socp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t * p_evt_write)
+static void on_socp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t const * p_evt_write)
 {
     ble_cgms_socp_value_t                 socp_request;
     nrf_ble_cgms_evt_t                    evt;
@@ -407,8 +382,8 @@ void on_socp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t * p_evt_
 }
 
 
-void cgms_socp_on_rw_auth_req(nrf_ble_cgms_t                       * p_cgms,
-                              ble_gatts_evt_rw_authorize_request_t * p_auth_req)
+void cgms_socp_on_rw_auth_req(nrf_ble_cgms_t                             * p_cgms,
+                              ble_gatts_evt_rw_authorize_request_t const * p_auth_req)
 {
     if (p_auth_req->type == BLE_GATTS_AUTHORIZE_TYPE_WRITE)
     {
@@ -416,15 +391,6 @@ void cgms_socp_on_rw_auth_req(nrf_ble_cgms_t                       * p_cgms,
         {
             on_socp_value_write(p_cgms, &p_auth_req->request.write);
         }
-    }
-}
-
-
-void cgms_socp_on_tx_complete(nrf_ble_cgms_t * p_cgms)
-{
-    if (p_cgms->cgms_com_state == STATE_SOCP_RESPONSE_PENDING)
-    {
-        socp_send(p_cgms);
     }
 }
 

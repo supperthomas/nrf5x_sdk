@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -50,7 +50,7 @@
 #define ANT_REQUEST_CONTROLLER_H__
 #include <stdbool.h>
 #include "ant_common_page_70.h"
-#include "ant_stack_handler_types.h"
+#include "nrf_sdh_ant.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -127,12 +127,12 @@ bool ant_request_controller_ack_needed(ant_request_controller_t * p_controller);
  * @details All events from the ANT stack that are related to the appropriate channel number
  *          should be propagated.
  *
- * @param[in]  p_controller             Pointer to the controller instance.
- * @param[in]  p_ant_event              Event received from the ANT stack.
+ * @param[in]  p_controller         Pointer to the controller instance.
+ * @param[in]  p_ant_evt            Event received from the ANT stack.
  */
 ant_request_controller_evt_t ant_request_controller_disp_evt_handler(
     ant_request_controller_t * p_controller,
-    ant_evt_t                * p_ant_event);
+    ant_evt_t                * p_ant_evt);
 
 /**
  * @brief Function for handling ANT events on sensor side.
@@ -141,11 +141,11 @@ ant_request_controller_evt_t ant_request_controller_disp_evt_handler(
  *          should be propagated.
  *
  * @param[in]  p_controller             Pointer to the controller instance.
- * @param[in]  p_ant_event              Event received from the ANT stack.
+ * @param[in]  p_ant_evt                Event received from the ANT stack.
  * @retval     TRUE                     If there was a pending page.
  */
 void ant_request_controller_sens_evt_handler(ant_request_controller_t * p_controller,
-                                            ant_evt_t                * p_ant_event);
+                                             ant_evt_t                * p_ant_evt);
 
 
 

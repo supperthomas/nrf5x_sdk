@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,10 +35,19 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "conn_mw_nrf_soc.h"
 #if defined(BLE_STACK_SUPPORT_REQD)
+#include "ble.h"
+#include "ble_gap.h"
+#include "ble_gattc.h"
+#include "ble_gatts.h"
+
+#ifndef S112
+#include "ble_l2cap.h"
+#endif //!S112
+
 #include "conn_mw_ble.h"
 #include "conn_mw_ble_l2cap.h"
 #include "conn_mw_ble_gap.h"
@@ -73,25 +82,37 @@ static const conn_mw_item_t conn_mw_item[] = {
     {SD_BLE_CFG_SET, conn_mw_ble_cfg_set},
 #endif
     //Functions from ble_l2cap.h
+#ifndef S112
 #if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 4
     {SD_BLE_L2CAP_CID_REGISTER, conn_mw_ble_l2cap_cid_register},
     {SD_BLE_L2CAP_CID_UNREGISTER, conn_mw_ble_l2cap_cid_unregister},
     {SD_BLE_L2CAP_TX, conn_mw_ble_l2cap_tx},
+#elif defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION >= 5
+    {SD_BLE_L2CAP_CH_SETUP, conn_mw_l2cap_ch_setup},
+    {SD_BLE_L2CAP_CH_RELEASE, conn_mw_l2cap_ch_release},
+    {SD_BLE_L2CAP_CH_RX, conn_mw_l2cap_ch_rx},
+    {SD_BLE_L2CAP_CH_TX, conn_mw_l2cap_ch_tx},
+    {SD_BLE_L2CAP_CH_FLOW_CONTROL, conn_mw_l2cap_ch_flow_control},
 #endif
+#endif //!S112
     //Functions from ble_gap.h
-    {SD_BLE_GAP_SCAN_STOP, conn_mw_ble_gap_scan_stop},
     {SD_BLE_GAP_ADDR_SET, conn_mw_ble_gap_addr_set},
     {SD_BLE_GAP_ADDR_GET, conn_mw_ble_gap_addr_get},
     {SD_BLE_GAP_PRIVACY_SET, conn_mw_ble_gap_privacy_set},
     {SD_BLE_GAP_PRIVACY_GET, conn_mw_ble_gap_privacy_get},
     {SD_BLE_GAP_WHITELIST_SET, conn_mw_ble_gap_whitelist_set},
     {SD_BLE_GAP_DEVICE_IDENTITIES_SET, conn_mw_ble_gap_device_identities_set},
+#ifndef S112
+    {SD_BLE_GAP_SCAN_START, conn_mw_ble_gap_scan_start},
+    {SD_BLE_GAP_SCAN_STOP, conn_mw_ble_gap_scan_stop},
     {SD_BLE_GAP_CONNECT, conn_mw_ble_gap_connect},
     {SD_BLE_GAP_CONNECT_CANCEL, conn_mw_ble_gap_connect_cancel},
-    {SD_BLE_GAP_SCAN_START, conn_mw_ble_gap_scan_start},
-    {SD_BLE_GAP_SEC_INFO_REPLY, conn_mw_ble_gap_sec_info_reply},
     {SD_BLE_GAP_ENCRYPT, conn_mw_ble_gap_encrypt},
+#endif
+    {SD_BLE_GAP_SEC_INFO_REPLY, conn_mw_ble_gap_sec_info_reply},
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION < 6
     {SD_BLE_GAP_ADV_DATA_SET, conn_mw_ble_gap_adv_data_set},
+#endif
     {SD_BLE_GAP_ADV_START, conn_mw_ble_gap_adv_start},
     {SD_BLE_GAP_ADV_STOP, conn_mw_ble_gap_adv_stop},
     {SD_BLE_GAP_CONN_PARAM_UPDATE, conn_mw_ble_gap_conn_param_update},
@@ -116,10 +137,17 @@ static const conn_mw_item_t conn_mw_item[] = {
     {SD_BLE_GAP_LESC_OOB_DATA_GET, conn_mw_ble_gap_lesc_oob_data_get},
     {SD_BLE_GAP_RSSI_GET, conn_mw_ble_gap_rssi_get},
 #if NRF_SD_BLE_API_VERSION >= 5
-    {SD_BLE_GAP_PHY_REQUEST, conn_mw_ble_gap_phy_request},
+    {SD_BLE_GAP_PHY_UPDATE, conn_mw_ble_gap_phy_update},
 #endif
-#if NRF_SD_BLE_API_VERSION >= 4
+#if NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
     {SD_BLE_GAP_DATA_LENGTH_UPDATE, conn_mw_ble_gap_data_length_update},
+#endif
+#if NRF_SD_BLE_API_VERSION > 5
+    {SD_BLE_GAP_ADV_SET_CONFIGURE, conn_mw_ble_gap_adv_set_configure},
+#ifndef S112
+    {SD_BLE_GAP_QOS_CHANNEL_SURVEY_START, conn_mw_ble_gap_qos_channel_survey_start},
+    {SD_BLE_GAP_QOS_CHANNEL_SURVEY_STOP, conn_mw_ble_gap_qos_channel_survey_stop},
+#endif //!S112
 #endif
     //Functions from ble_gattc.h
     {SD_BLE_GATTC_PRIMARY_SERVICES_DISCOVER, conn_mw_ble_gattc_primary_services_discover},

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include <stdint.h>
 #include <string.h>
@@ -43,11 +43,14 @@
 #include "ble_srv_common.h"
 #include "cgms_racp.h"
 #include "cgms_db.h"
+#include "nrf_ble_gq.h"
 #include "cgms_meas.h"
 
-#define OPERAND_FILTER_TYPE_RESV        0x00 // !< Filter type value reserved for future use.
-#define OPERAND_FILTER_TYPE_SEQ_NUM     0x01 // !< Filter data using Sequence Number criteria.
-#define OPERAND_FILTER_TYPE_FACING_TIME 0x02 // !< Filter data using User Facing Time criteria.
+#define OPERAND_LESS_GREATER_FILTER_TYPE_SIZE  1 // !< 1 byte.
+#define OPERAND_LESS_GREATER_FILTER_PARAM_SIZE 2 // !< 2 bytes.
+#define OPERAND_LESS_GREATER_SIZE              OPERAND_LESS_GREATER_FILTER_TYPE_SIZE \
+                                             + OPERAND_LESS_GREATER_FILTER_PARAM_SIZE  // !< Total size of the operand.
+
 
 /**@brief Function for adding a characteristic for the Record Access Control Point.
  *
@@ -85,69 +88,33 @@ ret_code_t cgms_racp_char_add(nrf_ble_cgms_t * p_cgms)
  */
 static void racp_send(nrf_ble_cgms_t * p_cgms, ble_racp_value_t * p_racp_val)
 {
-    uint32_t               err_code;
-    uint8_t                encoded_resp[25];
-    uint8_t                len;
-    uint16_t               hvx_len;
-    ble_gatts_hvx_params_t hvx_params;
+    uint32_t         err_code;
+    uint8_t          encoded_resp[25];
+    uint16_t         len;
+    nrf_ble_gq_req_t cgms_req;
 
-    if (
-        (p_cgms->cgms_com_state != STATE_RACP_RESPONSE_PENDING)
-        &&
-        (p_cgms->racp_data.racp_proc_records_reported_since_txcomplete > 0)
-       )
-    {
-        p_cgms->cgms_com_state = STATE_RACP_RESPONSE_PENDING;
-        return;
-    }
+    memset(&cgms_req, 0, sizeof(nrf_ble_gq_req_t));
 
     // Send indication
-    len     = ble_racp_encode(p_racp_val, encoded_resp);
-    hvx_len = len;
+    len = ble_racp_encode(p_racp_val, encoded_resp);
 
-    memset(&hvx_params, 0, sizeof(hvx_params));
+    cgms_req.type                               = NRF_BLE_GQ_REQ_GATTS_HVX;
+    cgms_req.error_handler.cb                   = p_cgms->gatt_err_handler;
+    cgms_req.error_handler.p_ctx                = p_cgms;
+    cgms_req.params.gatts_hvx.type    = BLE_GATT_HVX_INDICATION;
+    cgms_req.params.gatts_hvx.handle  = p_cgms->char_handles.racp.value_handle;
+    cgms_req.params.gatts_hvx.offset  = 0;
+    cgms_req.params.gatts_hvx.p_data  = encoded_resp;
+    cgms_req.params.gatts_hvx.p_len   = &len;
 
-    hvx_params.handle = p_cgms->char_handles.racp.value_handle;
-    hvx_params.type   = BLE_GATT_HVX_INDICATION;
-    hvx_params.offset = 0;
-    hvx_params.p_len  = &hvx_len;
-    hvx_params.p_data = encoded_resp;
+    err_code = nrf_ble_gq_item_add(p_cgms->p_gatt_queue, &cgms_req, p_cgms->conn_handle);
 
-    err_code = sd_ble_gatts_hvx(p_cgms->conn_handle, &hvx_params);
-
-    // Error handling
-    if ((err_code == NRF_SUCCESS) && (hvx_len != len))
+    // Report error to application
+    if ((p_cgms->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS) &&
+        (err_code != NRF_ERROR_INVALID_STATE))
     {
-        err_code = NRF_ERROR_DATA_SIZE;
-    }
-
-    switch (err_code)
-    {
-        case NRF_SUCCESS:
-            // Wait for HVC event.
-            p_cgms->cgms_com_state = STATE_RACP_RESPONSE_IND_VERIF;
-            break;
-
-        case NRF_ERROR_RESOURCES:
-            // Wait for TX_COMPLETE event to retry transmission.
-            p_cgms->cgms_com_state = STATE_RACP_RESPONSE_PENDING;
-            break;
-
-        case NRF_ERROR_INVALID_STATE:
-            // Make sure state machine returns to the default state.
-            p_cgms->cgms_com_state = STATE_NO_COMM;
-            break;
-
-        default:
-            // Report error to application.
-            if (p_cgms->error_handler != NULL)
-            {
-                p_cgms->error_handler(err_code);
-            }
-
-            // Make sure state machine returns to the default state.
-            p_cgms->cgms_com_state = STATE_NO_COMM;
-            break;
+        p_cgms->error_handler(err_code);
     }
 }
 
@@ -188,7 +155,7 @@ static uint32_t racp_report_records_all(nrf_ble_cgms_t * p_cgms)
 
     if (p_cgms->racp_data.racp_proc_record_ndx >= total_records)
     {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
+        p_cgms->racp_data.racp_procesing_active = false;
     }
     else
     {
@@ -239,7 +206,7 @@ static uint32_t racp_report_records_first_last(nrf_ble_cgms_t * p_cgms)
 
     if ((p_cgms->racp_data.racp_proc_records_reported != 0) || (total_records == 0))
     {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
+        p_cgms->racp_data.racp_procesing_active = false;
     }
     else
     {
@@ -280,39 +247,20 @@ static uint32_t racp_report_records_first_last(nrf_ble_cgms_t * p_cgms)
  */
 static ret_code_t racp_report_records_less_equal(nrf_ble_cgms_t * p_cgms)
 {
-    uint16_t total_rec_nb;
     uint16_t total_rec_nb_to_send;
     uint16_t rec_nb_left_to_send;
-    uint8_t nb_rec_to_send;
-    uint16_t offset;
+    uint8_t  nb_rec_to_send;
     uint16_t i;
 
-    if(p_cgms->racp_data.racp_request.operand_len != 2)
-    {
-        if (p_cgms->error_handler != NULL)
-        {
-            p_cgms->error_handler(NRF_ERROR_INVALID_LENGTH);
-        }
-    }
-
-    total_rec_nb         = cgms_db_num_records_get();
-
-    offset = uint16_decode(p_cgms->racp_data.racp_request.p_operand);
-    if (offset >= total_rec_nb)
-    {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
-        return NRF_SUCCESS;
-    }
-
-    total_rec_nb_to_send = offset;
+    total_rec_nb_to_send = p_cgms->racp_data.racp_proc_records_ndx_last_to_send +1;
 
     if (p_cgms->racp_data.racp_proc_record_ndx >= total_rec_nb_to_send)
     {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
+        p_cgms->racp_data.racp_procesing_active = false;
     }
     else
     {
-        uint32_t       err_code;
+        ret_code_t     err_code;
         ble_cgms_rec_t rec[NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX];
 
         rec_nb_left_to_send = total_rec_nb_to_send - p_cgms->racp_data.racp_proc_records_reported;
@@ -325,8 +273,6 @@ static ret_code_t racp_report_records_less_equal(nrf_ble_cgms_t * p_cgms)
         {
             nb_rec_to_send = (uint8_t)rec_nb_left_to_send;
         }
-
-        p_cgms->racp_data.racp_proc_record_ndx = 0;
 
         for (i = 0; i < nb_rec_to_send; i++)
         {
@@ -356,72 +302,51 @@ static ret_code_t racp_report_records_less_equal(nrf_ble_cgms_t * p_cgms)
  */
 static ret_code_t racp_report_records_greater_equal(nrf_ble_cgms_t * p_cgms)
 {
-    uint16_t total_rec_nb;
-    uint16_t total_rec_nb_to_send;
-    uint16_t rec_nb_left_to_send;
-    uint8_t nb_rec_to_send;
-    uint16_t offset;
-    uint16_t i;
+    ret_code_t err_code;
+    uint16_t   total_rec_nb = cgms_db_num_records_get();
+    uint16_t   rec_nb_left_to_send;
+    uint8_t    nb_rec_to_send;
+    uint16_t   i;
 
-    if(p_cgms->racp_data.racp_request.operand_len != 2)
+
+    total_rec_nb = cgms_db_num_records_get();
+    if (p_cgms->racp_data.racp_proc_record_ndx >= total_rec_nb)
     {
-        if (p_cgms->error_handler != NULL)
-        {
-            p_cgms->error_handler(NRF_ERROR_INVALID_LENGTH);
-        }
-    }
+        p_cgms->racp_data.racp_procesing_active = false;
 
-    total_rec_nb         = cgms_db_num_records_get();
-
-    offset = uint16_decode(p_cgms->racp_data.racp_request.p_operand);
-    if (offset >= total_rec_nb)
-    {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
         return NRF_SUCCESS;
     }
 
-    total_rec_nb_to_send = total_rec_nb - offset;
+    ble_cgms_rec_t rec[NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX];
 
-    if (p_cgms->racp_data.racp_proc_record_ndx >= total_rec_nb_to_send)
+    rec_nb_left_to_send = total_rec_nb - p_cgms->racp_data.racp_proc_record_ndx;
+    if (rec_nb_left_to_send > NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX)
     {
-        p_cgms->cgms_com_state = STATE_NO_COMM;
+        nb_rec_to_send = NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX;
     }
     else
     {
-        uint32_t       err_code;
-        ble_cgms_rec_t rec[NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX];
+        nb_rec_to_send = (uint8_t)rec_nb_left_to_send;
+    }
 
-        rec_nb_left_to_send = total_rec_nb_to_send - p_cgms->racp_data.racp_proc_records_reported;
-
-        if (rec_nb_left_to_send > NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX)
-        {
-            nb_rec_to_send = NRF_BLE_CGMS_MEAS_REC_PER_NOTIF_MAX;
-        }
-        else
-        {
-            nb_rec_to_send = (uint8_t)rec_nb_left_to_send;
-        }
-
-        p_cgms->racp_data.racp_proc_record_ndx = offset;
-
-        for (i = 0; i < nb_rec_to_send; i++)
-        {
-            err_code = cgms_db_record_get(p_cgms->racp_data.racp_proc_record_ndx + i, &(rec[i]));
-            if (err_code != NRF_SUCCESS)
-            {
-                return err_code;
-            }
-        }
-        err_code = cgms_meas_send(p_cgms, rec, &nb_rec_to_send);
+    for (i = 0; i < nb_rec_to_send; i++)
+    {
+        err_code = cgms_db_record_get(p_cgms->racp_data.racp_proc_record_ndx + i, &(rec[i]));
         if (err_code != NRF_SUCCESS)
         {
             return err_code;
         }
-        p_cgms->racp_data.racp_proc_record_ndx += nb_rec_to_send;
     }
+    err_code = cgms_meas_send(p_cgms, rec, &nb_rec_to_send);
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+    p_cgms->racp_data.racp_proc_record_ndx += nb_rec_to_send;
 
    return NRF_SUCCESS;
 }
+
 
 /**@brief Function for informing that the REPORT RECORDS procedure is completed.
  *
@@ -450,9 +375,9 @@ static void racp_report_records_completed(nrf_ble_cgms_t * p_cgms)
  */
 static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
 {
-    uint32_t err_code;
+    ret_code_t err_code = NRF_SUCCESS;
 
-    while (p_cgms->cgms_com_state == STATE_RACP_PROC_ACTIVE)
+    while (p_cgms->racp_data.racp_procesing_active)
     {
         // Execute requested procedure
         switch (p_cgms->racp_data.racp_proc_operator)
@@ -462,6 +387,7 @@ static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
                 break;
 
             case RACP_OPERATOR_FIRST:
+                // Fall through.
             case RACP_OPERATOR_LAST:
                 err_code = racp_report_records_first_last(p_cgms);
                 break;
@@ -478,9 +404,8 @@ static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
                     p_cgms->error_handler(NRF_ERROR_INTERNAL);
                 }
 
-                // Make sure state machine returns to the default state
-                // state_set(STATE_NO_COMM);
-                p_cgms->cgms_com_state = STATE_NO_COMM;
+                p_cgms->racp_data.racp_procesing_active = false;
+
                 return;
         }
 
@@ -488,7 +413,7 @@ static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
         switch (err_code)
         {
             case NRF_SUCCESS:
-                if (p_cgms->cgms_com_state != STATE_RACP_PROC_ACTIVE)
+                if (!p_cgms->racp_data.racp_procesing_active)
                 {
                     racp_report_records_completed(p_cgms);
                 }
@@ -500,7 +425,7 @@ static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
 
             case NRF_ERROR_INVALID_STATE:
                 // Notification is probably not enabled. Ignore request.
-                p_cgms->cgms_com_state = STATE_NO_COMM;
+                p_cgms->racp_data.racp_procesing_active = false;;
                 return;
 
             default:
@@ -511,7 +436,7 @@ static void racp_report_records_procedure(nrf_ble_cgms_t * p_cgms)
                 }
 
                 // Make sure state machine returns to the default state.
-                p_cgms->cgms_com_state = STATE_NO_COMM;
+                p_cgms->racp_data.racp_procesing_active = false;
                 return;
         }
     }
@@ -537,7 +462,7 @@ static bool is_request_to_be_executed(nrf_ble_cgms_t         * p_cgms,
 
     if (p_racp_request->opcode == RACP_OPCODE_ABORT_OPERATION)
     {
-        if (p_cgms->cgms_com_state == STATE_RACP_PROC_ACTIVE)
+        if (p_cgms->racp_data.racp_procesing_active)
         {
             if (p_racp_request->operator != RACP_OPERATOR_NULL)
             {
@@ -557,19 +482,21 @@ static bool is_request_to_be_executed(nrf_ble_cgms_t         * p_cgms,
             *p_response_code = RACP_RESPONSE_ABORT_FAILED;
         }
     }
-    else if (p_cgms->cgms_com_state != STATE_NO_COMM)
+    else if (p_cgms->racp_data.racp_procesing_active)
     {
         return false;
     }
-    // supported opcodes
+    // Supported opcodes
     else if ((p_racp_request->opcode == RACP_OPCODE_REPORT_RECS) ||
              (p_racp_request->opcode == RACP_OPCODE_REPORT_NUM_RECS))
     {
         switch (p_racp_request->operator)
         {
-            // operators WITHOUT a filter
+            // Operators without a filter.
             case RACP_OPERATOR_ALL:
+                // Fall through.
             case RACP_OPERATOR_FIRST:
+                // Fall through.
             case RACP_OPERATOR_LAST:
                 if (p_racp_request->operand_len != 0)
                 {
@@ -577,43 +504,118 @@ static bool is_request_to_be_executed(nrf_ble_cgms_t         * p_cgms,
                 }
                 break;
 
-            // operators WITH a filter
+            // Operators with a filter as part of the operand.
+            case RACP_OPERATOR_LESS_OR_EQUAL:
+                // Fall Through.
             case RACP_OPERATOR_GREATER_OR_EQUAL:
-                //*p_response_code = RACP_RESPONSE_OPERATOR_UNSUPPORTED;
+                if (*(p_racp_request->p_operand) == RACP_OPERAND_FILTER_TYPE_FACING_TIME)
+                {
+                    *p_response_code = RACP_RESPONSE_PROCEDURE_NOT_DONE;
+                }
+                if (p_racp_request->operand_len != OPERAND_LESS_GREATER_SIZE)
+                {
+                    *p_response_code = RACP_RESPONSE_INVALID_OPERAND;
+                }
                 break;
 
-            // unsupported operators
-            case RACP_OPERATOR_LESS_OR_EQUAL:
-                break;
             case RACP_OPERATOR_RANGE:
                 *p_response_code = RACP_RESPONSE_OPERATOR_UNSUPPORTED;
                 break;
 
-            // invalid operators
+            // Invalid operators.
             case RACP_OPERATOR_NULL:
+                // Fall through.
             default:
                 *p_response_code = RACP_RESPONSE_INVALID_OPERATOR;
                 break;
         }
     }
-    // unsupported opcodes
+    // Unsupported opcodes.
     else if (p_racp_request->opcode == RACP_OPCODE_DELETE_RECS)
     {
         *p_response_code = RACP_RESPONSE_OPCODE_UNSUPPORTED;
     }
-    // unknown opcodes
+    // Unknown opcodes.
     else
     {
         *p_response_code = RACP_RESPONSE_OPCODE_UNSUPPORTED;
     }
 
-    // NOTE: The computation of the return value will change slightly when deferred write has been
-    // implemented in the stack.
     return (*p_response_code == RACP_RESPONSE_RESERVED);
 }
 
 
+
+
+/**@brief Function for getting a record with time offset less or equal to the input param.
+ *
+ * @param[in]  offset     The record that this function returns must have an time offset less or greater to this.
+ * @param[out] record_num Pointer to the record index of the record that has the desired time offset.
+ *
+ * @retval NRF_SUCCESS If the record was successfully retrieved.
+ * @retval NRF_ERROR_NOT_FOUND A record with the desired offset does not exist in the database.
+ * @return                     If functions from other modules return errors to this function,
+ *                             the @ref nrf_error are propagated.
+ */
+static ret_code_t record_index_offset_less_or_equal_get(uint16_t offset, uint16_t * record_num)
+{
+    ret_code_t err_code;
+    ble_cgms_rec_t rec;
+    uint16_t upper_bound = cgms_db_num_records_get();
+
+    for((*record_num) = upper_bound; (*record_num)-- >0;)
+    {
+        err_code = cgms_db_record_get(*record_num, &rec);
+        if (err_code != NRF_SUCCESS)
+        {
+            return err_code;
+        }
+        if (rec.meas.time_offset <= offset)
+        {
+            return NRF_SUCCESS;
+        }
+    }
+    return NRF_ERROR_NOT_FOUND;
+}
+
+
+
+/**@brief Function for getting a record with time offset greater or equal to the input param.
+ *
+ * @param[in]  offset     The record that this function returns must have an time offset equal or
+ *                        greater to this.
+ * @param[out] record_num Pointer to the record index of the record that has the desired time offset.
+ *
+ * @retval NRF_SUCCESS         If the record was successfully retrieved.
+ * @retval NRF_ERROR_NOT_FOUND A record with the desired offset does not exist in the database.
+ * @return                     If functions from other modules return errors to this function,
+ *                             the @ref nrf_error are propagated.
+ */
+static ret_code_t record_index_offset_greater_or_equal_get(uint16_t offset, uint16_t * record_num)
+{
+    ret_code_t     err_code;
+    ble_cgms_rec_t rec;
+    uint16_t       upper_bound = cgms_db_num_records_get();
+
+    for(*record_num = 0; *record_num < upper_bound; (*record_num)++)
+    {
+        err_code = cgms_db_record_get(*record_num, &rec);
+        if (err_code != NRF_SUCCESS)
+        {
+            return err_code;
+        }
+        if (rec.meas.time_offset >= offset)
+        {
+            return NRF_SUCCESS;
+        }
+    }
+    return NRF_ERROR_NOT_FOUND;
+}
+
+
 /**@brief Function for processing a REPORT RECORDS request.
+ *
+ * @details Set initial values before entering the state machine of racp_report_records_procedure().
  *
  * @param[in]   p_cgms           Service instance.
  * @param[in]   p_racp_request   Request to be executed.
@@ -621,12 +623,33 @@ static bool is_request_to_be_executed(nrf_ble_cgms_t         * p_cgms,
 static void report_records_request_execute(nrf_ble_cgms_t   * p_cgms,
                                            ble_racp_value_t * p_racp_request)
 {
-    p_cgms->cgms_com_state = STATE_RACP_PROC_ACTIVE;
+    p_cgms->racp_data.racp_procesing_active = true;
 
-    p_cgms->racp_data.racp_proc_record_ndx       = 0;
-    p_cgms->racp_data.racp_proc_operator         = p_racp_request->operator;
-    p_cgms->racp_data.racp_proc_records_reported = 0;
-    //p_cgms->
+    p_cgms->racp_data.racp_proc_record_ndx               = 0;
+    p_cgms->racp_data.racp_proc_operator                 = p_racp_request->operator;
+    p_cgms->racp_data.racp_proc_records_reported         = 0;
+    p_cgms->racp_data.racp_proc_records_ndx_last_to_send = 0;
+
+    if (p_cgms->racp_data.racp_proc_operator == RACP_OPERATOR_GREATER_OR_EQUAL)
+    {
+        uint16_t  offset_requested = uint16_decode(&p_cgms->racp_data.racp_request.p_operand[OPERAND_LESS_GREATER_FILTER_TYPE_SIZE]);
+        ret_code_t err_code = record_index_offset_greater_or_equal_get(offset_requested, &p_cgms->racp_data.racp_proc_record_ndx);
+        if (err_code != NRF_SUCCESS)
+        {
+            racp_report_records_completed(p_cgms);
+        }
+
+    }
+    if (p_cgms->racp_data.racp_proc_operator == RACP_OPERATOR_LESS_OR_EQUAL)
+    {
+        uint16_t   offset_requested = uint16_decode(&p_cgms->racp_data.racp_request.p_operand[OPERAND_LESS_GREATER_FILTER_TYPE_SIZE]);
+        ret_code_t err_code         = record_index_offset_less_or_equal_get(offset_requested,
+                                                                            &p_cgms->racp_data.racp_proc_records_ndx_last_to_send);
+        if (err_code != NRF_SUCCESS)
+        {
+            racp_report_records_completed(p_cgms);
+        }
+    }
     racp_report_records_procedure(p_cgms);
 }
 
@@ -657,6 +680,21 @@ static void report_num_records_request_execute(nrf_ble_cgms_t   * p_cgms,
             num_records = 1;
         }
     }
+    else if (p_racp_request->operator == RACP_OPERATOR_GREATER_OR_EQUAL)
+    {
+        uint16_t   index_of_offset;
+        uint16_t   offset_requested = uint16_decode(&p_cgms->racp_data.racp_request.p_operand[OPERAND_LESS_GREATER_FILTER_TYPE_SIZE]);
+        ret_code_t err_code         = record_index_offset_greater_or_equal_get(offset_requested, &index_of_offset);
+
+        if (err_code != NRF_SUCCESS)
+        {
+            num_records = 0;
+        }
+        else
+        {
+            num_records = total_records - index_of_offset;
+        }
+    }
 
     p_cgms->racp_data.pending_racp_response.opcode      = RACP_OPCODE_NUM_RECS_RESPONSE;
     p_cgms->racp_data.pending_racp_response.operator    = RACP_OPERATOR_NULL;
@@ -676,10 +714,9 @@ static void report_num_records_request_execute(nrf_ble_cgms_t   * p_cgms,
  * @param[in]   p_cgms      Service instance.
  * @param[in]   p_evt_write WRITE event to be handled.
  */
-static void on_racp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t * p_evt_write)
+static void on_racp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t const * p_evt_write)
 {
-//    ble_racp_value_t racp_request;
-    uint8_t          response_code;
+    uint8_t response_code;
 
     // set up reply to authorized write.
     ble_gatts_rw_authorize_reply_params_t auth_reply;
@@ -690,11 +727,11 @@ static void on_racp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t *
     auth_reply.params.write.len    = 0;
     auth_reply.params.write.p_data = NULL;
 
-    // Decode request
+    // Decode request.
     ble_racp_decode(p_evt_write->len, p_evt_write->data, &p_cgms->racp_data.racp_request);
 
     // Check if request is to be executed
-    if (is_request_to_be_executed(p_cgms,&p_cgms->racp_data.racp_request, &response_code))
+    if (is_request_to_be_executed(p_cgms, &p_cgms->racp_data.racp_request, &response_code))
     {
         auth_reply.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
         auth_reply.params.write.update      = 1;
@@ -736,7 +773,7 @@ static void on_racp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t *
             return;
         }
         // Abort any running procedure
-        p_cgms->cgms_com_state = STATE_NO_COMM;
+        p_cgms->racp_data.racp_procesing_active = false;
 
         // Respond with error code
         racp_response_code_send(p_cgms, p_cgms->racp_data.racp_request.opcode, response_code);
@@ -761,8 +798,8 @@ static void on_racp_value_write(nrf_ble_cgms_t * p_cgms, ble_gatts_evt_write_t *
 }
 
 
-void cgms_racp_on_rw_auth_req(nrf_ble_cgms_t                       * p_cgms,
-                              ble_gatts_evt_rw_authorize_request_t * p_auth_req)
+void cgms_racp_on_rw_auth_req(nrf_ble_cgms_t                             * p_cgms,
+                              ble_gatts_evt_rw_authorize_request_t const * p_auth_req)
 {
     if (p_auth_req->type == BLE_GATTS_AUTHORIZE_TYPE_WRITE)
     {
@@ -780,13 +817,7 @@ void cgms_racp_on_rw_auth_req(nrf_ble_cgms_t                       * p_cgms,
  */
 void cgms_racp_on_tx_complete(nrf_ble_cgms_t * p_cgms)
 {
-    p_cgms->racp_data.racp_proc_records_reported_since_txcomplete = 0;
-
-    if (p_cgms->cgms_com_state == STATE_RACP_RESPONSE_PENDING)
-    {
-        racp_send(p_cgms, &p_cgms->racp_data.pending_racp_response);
-    }
-    else if (p_cgms->cgms_com_state == STATE_RACP_PROC_ACTIVE)
+    if (p_cgms->racp_data.racp_procesing_active)
     {
         racp_report_records_procedure(p_cgms);
     }

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_config.h"
 #if ANT_HRM_ENABLED
@@ -48,7 +48,7 @@
 #include "ant_hrm_utils.h"
 #include "app_error.h"
 
-#define NRF_LOG_MODULE_NAME "ANT_HRM"
+#define NRF_LOG_MODULE_NAME ant_hrm
 #if ANT_HRM_LOG_ENABLED
 #define NRF_LOG_LEVEL       ANT_HRM_LOG_LEVEL
 #define NRF_LOG_INFO_COLOR  ANT_HRM_INFO_COLOR
@@ -56,6 +56,7 @@
 #define NRF_LOG_LEVEL       0
 #endif // ANT_HRM_LOG_ENABLED
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #define BACKGROUND_DATA_INTERVAL 64 /**< The number of main data pages sent between background data page.
                                          Background data page is sent every 65th message. */
@@ -87,7 +88,7 @@ static ret_code_t ant_hrm_init(ant_hrm_profile_t          * p_profile,
     p_profile->page_3 = DEFAULT_ANT_HRM_PAGE3();
     p_profile->page_4 = DEFAULT_ANT_HRM_PAGE4();
 
-    NRF_LOG_INFO("ANT HRM channel %u init\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT HRM channel %u init", p_profile->channel_number);
     return ant_channel_init(p_channel_config);
 }
 
@@ -186,7 +187,7 @@ static void sens_message_encode(ant_hrm_profile_t * p_profile, uint8_t * p_messa
     p_hrm_message_payload->page_number = next_page_number_get(p_profile);
     p_hrm_message_payload->toggle_bit  = p_hrm_cb->toggle_bit;
 
-    NRF_LOG_INFO("HRM TX Page number: %u\r\n", p_hrm_message_payload->page_number);
+    NRF_LOG_INFO("HRM TX Page number: %u", p_hrm_message_payload->page_number);
 
     ant_hrm_page_0_encode(p_hrm_message_payload->page_payload, &(p_profile->page_0)); // Page 0 is present in each message
 
@@ -226,23 +227,24 @@ static void sens_message_encode(ant_hrm_profile_t * p_profile, uint8_t * p_messa
  */
 static void ant_message_send(ant_hrm_profile_t * p_profile)
 {
-        uint32_t err_code;
+    uint32_t err_code;
     uint8_t  p_message_payload[ANT_STANDARD_DATA_PAYLOAD_SIZE];
 
-                sens_message_encode(p_profile, p_message_payload);
-                err_code =
-                    sd_ant_broadcast_message_tx(p_profile->channel_number,
-                                                sizeof (p_message_payload),
-                                                p_message_payload);
-                APP_ERROR_CHECK(err_code);
+    sens_message_encode(p_profile, p_message_payload);
+    err_code =
+        sd_ant_broadcast_message_tx(p_profile->channel_number,
+                                    sizeof (p_message_payload),
+                                    p_message_payload);
+    APP_ERROR_CHECK(err_code);
 }
 
 
-void ant_hrm_sens_evt_handler(ant_hrm_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_hrm_sens_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 {
-    if (p_ant_event->channel == p_profile->channel_number)
+    ant_hrm_profile_t * p_profile = (ant_hrm_profile_t *)p_context;
+    if (p_ant_evt->channel == p_profile->channel_number)
     {
-        switch (p_ant_event->event)
+        switch (p_ant_evt->event)
         {
             case EVENT_TX:
                 ant_message_send(p_profile);
@@ -259,7 +261,7 @@ ret_code_t ant_hrm_disp_open(ant_hrm_profile_t * p_profile)
 {
     ASSERT(p_profile != NULL);
 
-    NRF_LOG_INFO("ANT HRM channel %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT HRM channel %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
@@ -271,7 +273,7 @@ ret_code_t ant_hrm_sens_open(ant_hrm_profile_t * p_profile)
     // Fill tx buffer for the first frame
     ant_message_send(p_profile);
 
-    NRF_LOG_INFO("ANT HRM channel %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT HRM channel %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
@@ -285,7 +287,7 @@ static void disp_message_decode(ant_hrm_profile_t * p_profile, uint8_t * p_messa
     const ant_hrm_message_layout_t * p_hrm_message_payload =
         (ant_hrm_message_layout_t *)p_message_payload;
 
-    NRF_LOG_INFO("HRM RX Page Number: %u\r\n", p_hrm_message_payload->page_number);
+    NRF_LOG_INFO("HRM RX Page Number: %u", p_hrm_message_payload->page_number);
 
     ant_hrm_page_0_decode(p_hrm_message_payload->page_payload, &(p_profile->page_0)); // Page 0 is present in each message
 
@@ -319,21 +321,19 @@ static void disp_message_decode(ant_hrm_profile_t * p_profile, uint8_t * p_messa
 }
 
 
-void ant_hrm_disp_evt_handler(ant_hrm_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_hrm_disp_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 {
-    if (p_ant_event->channel == p_profile->channel_number)
+    ant_hrm_profile_t * p_profile = ( ant_hrm_profile_t *)p_context;
+    if (p_ant_evt->channel == p_profile->channel_number)
     {
-        ANT_MESSAGE * p_message = (ANT_MESSAGE *)p_ant_event->msg.evt_buffer;
-
-        switch (p_ant_event->event)
+        switch (p_ant_evt->event)
         {
             case EVENT_RX:
-
-                if (p_message->ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
-                    || p_message->ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
-                    || p_message->ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
+                if (p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
+                 || p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
+                 || p_ant_evt->message.ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
                 {
-                    disp_message_decode(p_profile, p_message->ANT_MESSAGE_aucPayload);
+                    disp_message_decode(p_profile, p_ant_evt->message.ANT_MESSAGE_aucPayload);
                 }
                 break;
 

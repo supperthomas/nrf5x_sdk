@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -48,8 +48,9 @@
 #include "ser_dbg_sd_str.h"
 #include "ser_app_power_system_off.h"
 #include "app_util.h"
-#define NRF_LOG_MODULE_NAME "SER_XFER"
+#define NRF_LOG_MODULE_NAME ser_xfer
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #ifdef BLE_STACK_SUPPORT_REQD
 /** SoftDevice event handler. */
@@ -132,7 +133,7 @@ static void ser_sd_transport_rx_packet_handler(uint8_t * p_data, uint16_t length
 #ifdef BLE_STACK_SUPPORT_REQD
             case SER_PKT_TYPE_EVT:
                 /* It is ensured during opening that handler is not NULL. No check needed. */
-                NRF_LOG_DEBUG("[EVT]: %s \r\n", (uint32_t)ser_dbg_sd_evt_str_get(uint16_decode(&p_data[SER_EVT_ID_POS]))); // p_data points to EVT_ID
+                NRF_LOG_DEBUG("[EVT]: %s ", (uint32_t)ser_dbg_sd_evt_str_get(uint16_decode(&p_data[SER_EVT_ID_POS]))); // p_data points to EVT_ID
                 m_ble_evt_handler(p_data, length);
                 break;
 #endif // BLE_STACK_SUPPORT_REQD
@@ -140,7 +141,7 @@ static void ser_sd_transport_rx_packet_handler(uint8_t * p_data, uint16_t length
 #ifdef ANT_STACK_SUPPORT_REQD
             case SER_PKT_TYPE_ANT_EVT:
                 /* It is ensured during opening that handler is not NULL. No check needed. */
-                NRF_LOG_DEBUG("[ANT_EVT_ID]: %s \r\n", (uint32_t)ser_dbg_sd_evt_str_get(uint16_decode(&p_data[SER_EVT_ID_POS]))); // p_data points to EVT_ID
+                NRF_LOG_DEBUG("[ANT_EVT_ID]: %s ", (uint32_t)ser_dbg_sd_evt_str_get(uint16_decode(&p_data[SER_EVT_ID_POS]))); // p_data points to EVT_ID
                 m_ant_evt_handler(p_data, length);
                 break;
 #endif // ANT_STACK_SUPPORT_REQD
@@ -319,6 +320,6 @@ uint32_t ser_sd_transport_cmd_write(const uint8_t *                p_buffer,
         m_rsp_wait = false;
     }
 
-    NRF_LOG_DEBUG("[SD_CALL]:%s, err_code= 0x%X\r\n", (uint32_t)ser_dbg_sd_call_str_get(p_buffer[1]), err_code);
+    NRF_LOG_DEBUG("[SD_CALL]:%s, err_code= 0x%X", (uint32_t)ser_dbg_sd_call_str_get(p_buffer[1]), err_code);
     return err_code;
 }

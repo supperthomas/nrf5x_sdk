@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -77,7 +77,8 @@ extern "C" {
 #define RACP_OPERATOR_RFU_START              7       /**< Record Access Control Point operator - Start of Reserved for Future Use area. */
 
 /**@brief Record Access Control Point Operand Filter Type Value. */
-#define RACP_OPERAND_FILTER_TYPE_TIME_OFFSET 1       /**< Record Access Control Point Operand Filter Type Value - Time Offset- */
+#define RACP_OPERAND_FILTER_TYPE_TIME_OFFSET 1       /**< Record Access Control Point Operand Filter Type Value - Time Offset. */
+#define RACP_OPERAND_FILTER_TYPE_FACING_TIME 2       /**< Record Access Control Point Operand Filter Type Value - User Facing Time. */
 
 /**@brief Record Access Control Point response codes. */
 #define RACP_RESPONSE_RESERVED               0       /**< Record Access Control Point response code - Reserved for future use. */
@@ -110,7 +111,7 @@ typedef struct
  *                           @note This does not do a data copy. It assumes the data pointed to by
  *                                 p_data is persistant until no longer needed.
  */
-void ble_racp_decode(uint8_t data_len, uint8_t * p_data, ble_racp_value_t * p_racp_val);
+void ble_racp_decode(uint8_t data_len, uint8_t const * p_data, ble_racp_value_t * p_racp_val);
 
 /**@brief Function for encoding a Record Access Control Point response.
  *

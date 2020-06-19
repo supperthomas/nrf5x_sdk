@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "nrf_ble_escs.h"
 #include <string.h>
@@ -52,177 +52,194 @@
 
 typedef struct
 {
-    uint16_t uuid;
-    uint8_t read:1;
-    uint8_t write:1;
-    uint8_t rd_auth:1;
-    uint8_t wr_auth:1;
-    uint8_t vlen:1;
-    uint8_t vloc:2;
-    uint8_t init_len;
-    uint8_t max_len;
-} char_init_t;
-
-typedef struct
-{
     uint16_t val_handle;
     uint16_t uuid;
 } val_handle_to_uuid_t;
 
-static const char_init_t BROADCAST_CAP_CHAR_INIT =
+static ble_add_char_params_t BROADCAST_CAP_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_BROADCAST_CAP_CHAR,
-    .read = 1,
-    .write = 0,
-    .rd_auth = 1,
-    .wr_auth = 0,
-    .vlen = 1,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = NRF_BLE_ESCS_BROADCAST_CAP_LEN,
-    .max_len = NRF_BLE_ESCS_BROADCAST_CAP_LEN
+    .uuid        = BLE_UUID_ESCS_BROADCAST_CAP_CHAR,
+    .read_access = SEC_OPEN,
+    .char_props  =
+    {
+       .read = 1,
+    },
+    .is_defered_read = true,
+    .is_var_len      = true,
+    .init_len        = NRF_BLE_ESCS_BROADCAST_CAP_LEN,
+    .max_len         = NRF_BLE_ESCS_BROADCAST_CAP_LEN,
 };
 
-static const char_init_t ACTIVE_SLOT_CHAR_INIT =
+static ble_add_char_params_t ACTIVE_SLOT_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_ACTIVE_SLOT_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_USER,
-    .init_len = sizeof(nrf_ble_escs_active_slot_t),
-    .max_len = sizeof(nrf_ble_escs_active_slot_t)
+    .uuid         = BLE_UUID_ESCS_ACTIVE_SLOT_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .is_value_user    = true,
+    .init_len         = sizeof(nrf_ble_escs_active_slot_t),
+    .max_len          = sizeof(nrf_ble_escs_active_slot_t),
 };
 
-static const char_init_t ADV_INTERVAL_CHAR_INIT =
+static ble_add_char_params_t ADV_INTERVAL_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_ADV_INTERVAL_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = sizeof(nrf_ble_escs_adv_interval_t),
-    .max_len = sizeof(nrf_ble_escs_adv_interval_t)
+    .uuid         = BLE_UUID_ESCS_ADV_INTERVAL_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .init_len         = sizeof(nrf_ble_escs_adv_interval_t),
+    .max_len          = sizeof(nrf_ble_escs_adv_interval_t),
 };
 
-static const char_init_t RADIO_TX_PWR_CHAR_INIT =
+static ble_add_char_params_t RADIO_TX_PWR_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_RADIO_TX_PWR_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = sizeof(nrf_ble_escs_radio_tx_pwr_t),
-    .max_len = sizeof(nrf_ble_escs_radio_tx_pwr_t)
+    .uuid         = BLE_UUID_ESCS_RADIO_TX_PWR_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .init_len         = sizeof(nrf_ble_escs_radio_tx_pwr_t),
+    .max_len          = sizeof(nrf_ble_escs_radio_tx_pwr_t),
 };
 
-static const char_init_t ADV_TX_PWR_CHAR_INIT =
+static ble_add_char_params_t ADV_TX_PWR_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_ADV_TX_PWR_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = sizeof(nrf_ble_escs_adv_tx_pwr_t),
-    .max_len = sizeof(nrf_ble_escs_adv_tx_pwr_t)
+    .uuid         = BLE_UUID_ESCS_ADV_TX_PWR_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .init_len         = sizeof(nrf_ble_escs_adv_tx_pwr_t),
+    .max_len          = sizeof(nrf_ble_escs_adv_tx_pwr_t),
 };
 
-static const char_init_t LOCK_STATE_CHAR_INIT =
+static ble_add_char_params_t LOCK_STATE_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_LOCK_STATE_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 1,
-    .vloc = BLE_GATTS_VLOC_USER,
-    .init_len = 1,
-    .max_len = 17
+    .uuid         = BLE_UUID_ESCS_LOCK_STATE_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .is_var_len       = true,
+    .is_value_user    = true,
+    .init_len         = 1,
+    .max_len          = 17,
 };
 
-static const char_init_t UNLOCK_CHAR_INIT =
+static ble_add_char_params_t UNLOCK_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_UNLOCK_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = 1,
-    .max_len = ESCS_AES_KEY_SIZE
+    .uuid         = BLE_UUID_ESCS_UNLOCK_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .init_len         = 1,
+    .max_len          = ESCS_AES_KEY_SIZE,
 };
 
-static const char_init_t PUBLIC_ECDH_KEY_CHAR_INIT =
+static ble_add_char_params_t PUBLIC_ECDH_KEY_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_PUBLIC_ECDH_KEY_CHAR,
-    .read = 1,
-    .write = 0,
-    .rd_auth = 1,
-    .wr_auth = 0,
-    .vlen = 1,
-    .init_len = 1,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .max_len = ESCS_ECDH_KEY_SIZE
+    .uuid        = BLE_UUID_ESCS_PUBLIC_ECDH_KEY_CHAR,
+    .read_access = SEC_OPEN,
+    .char_props  =
+    {
+       .read  = 1,
+    },
+    .is_defered_read = true,
+    .is_var_len      = true,
+    .init_len        = 1,
+    .max_len         = ESCS_ECDH_KEY_SIZE,
 };
 
-static const char_init_t EID_ID_KEY_CHAR_INIT =
+static ble_add_char_params_t EID_ID_KEY_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_EID_ID_KEY_CHAR,
-    .read = 1,
-    .write = 0,
-    .rd_auth = 1,
-    .wr_auth = 0,
-    .vlen = 1,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = 1,
-    .max_len = ESCS_AES_KEY_SIZE
+    .uuid        = BLE_UUID_ESCS_EID_ID_KEY_CHAR,
+    .read_access = SEC_OPEN,
+    .char_props  =
+    {
+       .read  = 1,
+    },
+    .is_defered_read = true,
+    .is_var_len      = true,
+    .init_len        = 1,
+    .max_len         = ESCS_AES_KEY_SIZE,
 };
 
-static const char_init_t RW_ADV_SLOT_CHAR_INIT =
+static ble_add_char_params_t RW_ADV_SLOT_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_RW_ADV_SLOT_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 1,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = 0,
-    .max_len = ESCS_ADV_SLOT_CHAR_LENGTH_MAX
+    .uuid         = BLE_UUID_ESCS_RW_ADV_SLOT_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .is_var_len       = true,
+    .max_len          = ESCS_ADV_SLOT_CHAR_LENGTH_MAX,
 };
 
-static const char_init_t FACTORY_RESET_CHAR_INIT =
+static ble_add_char_params_t FACTORY_RESET_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_FACTORY_RESET_CHAR,
-    .read = 0,
-    .write = 1,
-    .rd_auth = 0,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = sizeof(nrf_ble_escs_factory_reset_t),
-    .max_len = sizeof(nrf_ble_escs_factory_reset_t)
+    .uuid         = BLE_UUID_ESCS_FACTORY_RESET_CHAR,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .write = 1,
+    },
+    .is_defered_write = true,
+    .init_len         = sizeof(nrf_ble_escs_factory_reset_t),
+    .max_len          = sizeof(nrf_ble_escs_factory_reset_t),
 };
 
-static const char_init_t REMAIN_CONNECTABLE_CHAR_INIT =
+static ble_add_char_params_t REMAIN_CONNECTABLE_CHAR_INIT =
 {
-    .uuid = BLE_UUID_ESCS_REMAIN_CONNECTABLE_CHAR,
-    .read = 1,
-    .write = 1,
-    .rd_auth = 1,
-    .wr_auth = 1,
-    .vlen = 0,
-    .vloc = BLE_GATTS_VLOC_STACK,
-    .init_len = 1,
-    .max_len = 1
+    .uuid         = BLE_UUID_ESCS_REMAIN_CONNECTABLE_CHAR,
+    .read_access  = SEC_OPEN,
+    .write_access = SEC_OPEN,
+    .char_props   =
+    {
+       .read  = 1,
+       .write = 1,
+    },
+    .is_defered_read  = true,
+    .is_defered_write = true,
+    .init_len         = 1,
+    .max_len          = 1,
 };
 
 static val_handle_to_uuid_t m_handle_to_uuid_map[BLE_ESCS_NUMBER_OF_CHARACTERISTICS]; //!< Map from handle to UUID.
@@ -244,69 +261,26 @@ static ble_user_mem_block_t m_eid_mem_block =
  *
  * @return NRF_SUCCESS on success, otherwise an error code.
  */
-static uint32_t char_add(const char_init_t        * p_char_init,
+static uint32_t char_add(ble_add_char_params_t    * p_char_init,
                          nrf_ble_escs_t           * p_escs,
                          void                     * p_value,
                          ble_gatts_char_handles_t * p_handles)
 {
     uint32_t err_code;
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
 
     VERIFY_PARAM_NOT_NULL(p_char_init);
     VERIFY_PARAM_NOT_NULL(p_escs);
     VERIFY_PARAM_NOT_NULL(p_value);
     VERIFY_PARAM_NOT_NULL(p_handles);
 
-    memset(&char_md, 0, sizeof(char_md));
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-    memset(&ble_uuid, 0, sizeof(ble_uuid));
-    memset(&attr_md, 0, sizeof(attr_md));
+    p_char_init->uuid_type    = p_escs->uuid_type;
+    p_char_init->p_init_value = p_value;
 
-    if(p_char_init->read)
-    {
-        char_md.char_props.read  = 1;
-        BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
-    }
+    err_code = characteristic_add(p_escs->service_handle,
+                                  p_char_init,
+                                  p_handles);
 
-    else
-    {
-        BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.read_perm);
-    }
-
-    if(p_char_init->write)
-    {
-        BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.write_perm);
-        char_md.char_props.write  = 1;
-    }
-
-    else
-    {
-        BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
-    }
-
-    ble_uuid.type = p_escs->uuid_type;
-    ble_uuid.uuid = p_char_init->uuid;
-
-    attr_md.vloc    = p_char_init->vloc;
-    attr_md.rd_auth = p_char_init->rd_auth;
-    attr_md.wr_auth = p_char_init->wr_auth;
-    attr_md.vlen    = p_char_init->vlen;
-
-    attr_char_value.p_uuid    = &ble_uuid;
-    attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = p_char_init->init_len;
-    attr_char_value.p_value   = p_value;
-    attr_char_value.max_len   = p_char_init->max_len;
-
-    err_code = sd_ble_gatts_characteristic_add(p_escs->service_handle,
-                                               &char_md,
-                                               &attr_char_value,
-                                               p_handles);
-
-    if(err_code == NRF_SUCCESS)
+    if (err_code == NRF_SUCCESS)
     {
         ASSERT(m_handle_to_uuid_map_idx < BLE_ESCS_NUMBER_OF_CHARACTERISTICS);
         m_handle_to_uuid_map[m_handle_to_uuid_map_idx].val_handle = p_handles->value_handle;
@@ -323,7 +297,7 @@ static uint32_t char_add(const char_init_t        * p_char_init,
  * @param[in] p_escs     Eddystone Configuration Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
  */
-static void on_connect(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static void on_connect(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     VERIFY_PARAM_NOT_NULL_VOID(p_escs);
     p_escs->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
@@ -335,7 +309,7 @@ static void on_connect(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
  * @param[in] p_escs    Eddystone Configuration Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
  */
-static void on_disconnect(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static void on_disconnect(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     VERIFY_PARAM_NOT_NULL_VOID(p_escs);
     UNUSED_PARAMETER(p_ble_evt);
@@ -347,9 +321,9 @@ static uint32_t get_evt_type_for_handle(uint16_t handle, uint16_t * p_uuid)
 {
     VERIFY_PARAM_NOT_NULL(p_uuid);
 
-    for(uint8_t i = 0; i < BLE_ESCS_NUMBER_OF_CHARACTERISTICS; ++i)
+    for (uint8_t i = 0; i < BLE_ESCS_NUMBER_OF_CHARACTERISTICS; ++i)
     {
-        if(m_handle_to_uuid_map[i].val_handle == handle)
+        if (m_handle_to_uuid_map[i].val_handle == handle)
         {
             *p_uuid = m_handle_to_uuid_map[i].uuid;
             return NRF_SUCCESS;
@@ -364,7 +338,7 @@ static uint32_t get_evt_type_for_handle(uint16_t handle, uint16_t * p_uuid)
  * @param[in] p_escs     Eddystone Configuration Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
  */
-static ret_code_t on_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static ret_code_t on_write(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     uint32_t err_code;
     uint16_t write_evt_uuid = 0;
@@ -372,7 +346,8 @@ static ret_code_t on_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
     VERIFY_PARAM_NOT_NULL(p_escs);
     VERIFY_PARAM_NOT_NULL(p_ble_evt);
 
-    ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.authorize_request.request.write;
+    ble_gatts_evt_write_t const * p_evt_write =
+        &p_ble_evt->evt.gatts_evt.params.authorize_request.request.write;
 
     err_code = get_evt_type_for_handle(p_evt_write->handle, &write_evt_uuid);
     RETURN_IF_ERROR(err_code);
@@ -392,7 +367,7 @@ static ret_code_t on_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
  * @param[in] p_escs     Eddystone Configuration Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
  */
-static void on_long_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static void on_long_write(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     static uint16_t write_evt_uuid;
     static bool write_evt_uuid_set = false;
@@ -401,8 +376,9 @@ static void on_long_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
     VERIFY_PARAM_NOT_NULL_VOID(p_escs);
     VERIFY_PARAM_NOT_NULL_VOID(p_ble_evt);
 
-    ble_gatts_evt_write_t * p_evt_write =
+    ble_gatts_evt_write_t const * p_evt_write =
         &p_ble_evt->evt.gatts_evt.params.authorize_request.request.write;
+
     ble_gatts_rw_authorize_reply_params_t reply = {0};
 
     if (p_evt_write->op == BLE_GATTS_OP_PREP_WRITE_REQ)
@@ -469,7 +445,7 @@ static void on_long_write(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
  * @param[in] p_escs     Eddystone Configuration Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
  */
-static ret_code_t on_read(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static ret_code_t on_read(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     VERIFY_PARAM_NOT_NULL(p_escs);
     VERIFY_PARAM_NOT_NULL(p_ble_evt);
@@ -485,13 +461,15 @@ static ret_code_t on_read(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
 }
 
 
-static ret_code_t on_rw_authorize_req(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+static ret_code_t on_rw_authorize_req(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     ret_code_t err_code;
     VERIFY_PARAM_NOT_NULL(p_escs);
     VERIFY_PARAM_NOT_NULL(p_ble_evt);
 
-    ble_gatts_evt_rw_authorize_request_t *ar = &p_ble_evt->evt.gatts_evt.params.authorize_request;
+    ble_gatts_evt_rw_authorize_request_t const * ar =
+        &p_ble_evt->evt.gatts_evt.params.authorize_request;
+
     if (ar->type == BLE_GATTS_AUTHORIZE_TYPE_READ)
     {
         err_code = on_read(p_escs, p_ble_evt);
@@ -506,10 +484,21 @@ static ret_code_t on_rw_authorize_req(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble
             RETURN_IF_ERROR(err_code);
         }
 
-        else if(ar->request.write.op == BLE_GATTS_OP_PREP_WRITE_REQ
+        else if (ar->request.write.op == BLE_GATTS_OP_PREP_WRITE_REQ
              || ar->request.write.op == BLE_GATTS_OP_EXEC_WRITE_REQ_NOW)
         {
             on_long_write(p_escs, p_ble_evt);
+        }
+        else if (ar->request.write.op == BLE_GATTS_OP_EXEC_WRITE_REQ_CANCEL)
+        {
+            ble_gatts_rw_authorize_reply_params_t auth_reply;
+            memset(&auth_reply, 0, sizeof(auth_reply));
+
+            auth_reply.type                     = BLE_GATTS_AUTHORIZE_TYPE_WRITE;
+            auth_reply.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
+
+            err_code = sd_ble_gatts_rw_authorize_reply(p_ble_evt->evt.gatts_evt.conn_handle, &auth_reply);
+            VERIFY_SUCCESS(err_code);
         }
         else
         {
@@ -525,7 +514,7 @@ static ret_code_t on_rw_authorize_req(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble
 
 
 
-ret_code_t nrf_ble_escs_on_ble_evt(nrf_ble_escs_t * p_escs, ble_evt_t * p_ble_evt)
+ret_code_t nrf_ble_escs_on_ble_evt(nrf_ble_escs_t * p_escs, ble_evt_t const * p_ble_evt)
 {
     ret_code_t err_code;
 
@@ -628,7 +617,7 @@ ret_code_t nrf_ble_escs_init(nrf_ble_escs_t * p_escs, const nrf_ble_escs_init_t 
     VERIFY_SUCCESS(err_code);
 
     err_code = char_add(&LOCK_STATE_CHAR_INIT, p_escs,
-                        p_escs->p_lock_state, &p_escs->lock_state_handles);
+                        &p_escs->lock_state, &p_escs->lock_state_handles);
     VERIFY_SUCCESS(err_code);
 
     err_code = char_add(&UNLOCK_CHAR_INIT, p_escs,

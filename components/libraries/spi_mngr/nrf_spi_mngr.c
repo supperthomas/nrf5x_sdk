@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2017 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2017 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 
@@ -44,6 +44,11 @@
 #include "nrf_assert.h"
 #include "app_util_platform.h"
 
+typedef volatile struct
+{
+    bool    transaction_in_progress;
+    uint8_t transaction_result;
+} nrf_spi_mngr_cb_data_t;
 
 static ret_code_t start_transfer(nrf_spi_mngr_t const * p_nrf_spi_mngr)
 {
@@ -132,52 +137,49 @@ static void start_pending_transaction(nrf_spi_mngr_t const * p_nrf_spi_mngr,
         {
             return;
         }
+
+        nrf_drv_spi_config_t const * p_instance_cfg;
+        if (p_cb->p_current_transaction->p_required_spi_cfg == NULL)
+        {
+            p_instance_cfg = &p_cb->default_configuration;
+        }
         else
         {
-            ret_code_t result;
-
-            nrf_drv_spi_config_t const * p_instance_cfg;
-            if (p_cb->p_current_transaction->p_required_spi_cfg == NULL)
-            {
-                p_instance_cfg = &p_cb->default_configuration ;
-            }
-            else
-            {
-                p_instance_cfg = p_cb->p_current_transaction->p_required_spi_cfg;
-            }
-
-            if (memcmp(p_cb->p_current_configuration, p_instance_cfg, sizeof(*p_instance_cfg)) != 0)
-            {
-                ret_code_t err_code;
-                nrf_drv_spi_uninit(&p_nrf_spi_mngr->spi);
-                err_code = nrf_drv_spi_init(&p_nrf_spi_mngr->spi,
-                                            p_instance_cfg,
-                                            spi_event_handler,
-                                            (void *)p_nrf_spi_mngr);
-                ASSERT(err_code == NRF_SUCCESS);
-                p_cb->p_current_configuration = p_instance_cfg;
-            }
-
-            // Try to start first transfer for this new transaction.
-            p_cb->current_transfer_idx = 0;
-
-            // Execute user code if available before starting transaction
-            transaction_begin_signal(p_nrf_spi_mngr);
-            result = start_transfer(p_nrf_spi_mngr);
-
-            // If transaction started successfully there is nothing more to do here now.
-            if (result == NRF_SUCCESS)
-            {
-                return;
-            }
-
-            // Transfer failed to start - notify user that this transaction
-            // cannot be started and try with next one (in next iteration of
-            // the loop).
-            transaction_end_signal(p_nrf_spi_mngr, result);
-
-            switch_transaction = true;
+            p_instance_cfg = p_cb->p_current_transaction->p_required_spi_cfg;
         }
+
+        ret_code_t result;
+
+        if (memcmp(p_cb->p_current_configuration, p_instance_cfg, sizeof(*p_instance_cfg)) != 0)
+        {
+            nrf_drv_spi_uninit(&p_nrf_spi_mngr->spi);
+            result = nrf_drv_spi_init(&p_nrf_spi_mngr->spi,
+                                      p_instance_cfg,
+                                      spi_event_handler,
+                                      (void *)p_nrf_spi_mngr);
+            ASSERT(result == NRF_SUCCESS);
+            p_cb->p_current_configuration = p_instance_cfg;
+        }
+
+        // Try to start first transfer for this new transaction.
+        p_cb->current_transfer_idx = 0;
+
+        // Execute user code if available before starting transaction
+        transaction_begin_signal(p_nrf_spi_mngr);
+        result = start_transfer(p_nrf_spi_mngr);
+
+        // If transaction started successfully there is nothing more to do here now.
+        if (result == NRF_SUCCESS)
+        {
+            return;
+        }
+
+        // Transfer failed to start - notify user that this transaction
+        // cannot be started and try with next one (in next iteration of
+        // the loop).
+        transaction_end_signal(p_nrf_spi_mngr, result);
+
+        switch_transaction = true;
     }
 }
 
@@ -256,7 +258,6 @@ ret_code_t nrf_spi_mngr_init(nrf_spi_mngr_t const *       p_nrf_spi_mngr,
     {
         nrf_spi_mngr_cb_t * p_cb = p_nrf_spi_mngr->p_nrf_spi_mngr_cb;
 
-        p_cb->internal_transaction_in_progress = false;
         p_cb->p_current_transaction = NULL;
         p_cb->default_configuration = *p_default_spi_config;
         p_cb->p_current_configuration = &p_cb->default_configuration;
@@ -298,62 +299,49 @@ ret_code_t nrf_spi_mngr_schedule(nrf_spi_mngr_t const *             p_nrf_spi_mn
 
 static void spi_internal_transaction_cb(ret_code_t result, void * p_user_data)
 {
-    nrf_spi_mngr_cb_t * p_cb = ((nrf_spi_mngr_t const *)p_user_data)->p_nrf_spi_mngr_cb;
+    nrf_spi_mngr_cb_data_t * p_cb_data = (nrf_spi_mngr_cb_data_t *)p_user_data;
 
-    p_cb->internal_transaction_result = result;
-    p_cb->internal_transaction_in_progress = false;
+    p_cb_data->transaction_result      = result;
+    p_cb_data->transaction_in_progress = false;
 }
 
 ret_code_t nrf_spi_mngr_perform(nrf_spi_mngr_t const *          p_nrf_spi_mngr,
+                                nrf_drv_spi_config_t const *    p_config,
                                 nrf_spi_mngr_transfer_t const * p_transfers,
                                 uint8_t                         number_of_transfers,
-                                void (* user_function)(void))
+                                void                            (* user_function)(void))
 {
     ASSERT(p_nrf_spi_mngr != NULL);
     ASSERT(p_transfers != NULL);
     ASSERT(number_of_transfers != 0);
 
-    ret_code_t err_code = NRF_SUCCESS;
-    nrf_spi_mngr_cb_t * p_cb = p_nrf_spi_mngr->p_nrf_spi_mngr_cb;
+    nrf_spi_mngr_cb_data_t cb_data =
+    {
+        .transaction_in_progress = true
+    };
 
-    CRITICAL_REGION_ENTER();
-    if (p_cb->internal_transaction_in_progress)
+    nrf_spi_mngr_transaction_t internal_transaction =
     {
-        err_code = NRF_ERROR_BUSY;
-    }
-    else
-    {
-        p_cb->internal_transaction_in_progress = true;
-    }
-    CRITICAL_REGION_EXIT();
+        .begin_callback      = NULL,
+        .end_callback        = spi_internal_transaction_cb,
+        .p_user_data         = (void *)&cb_data,
+        .p_transfers         = p_transfers,
+        .number_of_transfers = number_of_transfers,
+        .p_required_spi_cfg  = p_config
+    };
 
-    if (err_code != NRF_ERROR_BUSY)
+    ret_code_t result = nrf_spi_mngr_schedule(p_nrf_spi_mngr, &internal_transaction);
+    VERIFY_SUCCESS(result);
+
+    while (cb_data.transaction_in_progress)
     {
-        nrf_spi_mngr_transaction_t internal_transaction =
+        if (user_function)
         {
-            .begin_callback      = NULL,
-            .end_callback        = spi_internal_transaction_cb,
-            .p_user_data         = (void *)p_nrf_spi_mngr,
-            .p_transfers         = p_transfers,
-            .number_of_transfers = number_of_transfers,
-        };
-
-        err_code = nrf_spi_mngr_schedule(p_nrf_spi_mngr, &internal_transaction);
-
-        if (err_code == NRF_SUCCESS)
-        {
-            while (p_cb->internal_transaction_in_progress)
-            {
-                if (user_function)
-                {
-                    user_function();
-                }
-            }
-            err_code = p_cb->internal_transaction_result;
+            user_function();
         }
     }
 
-    return err_code;
+    return cb_data.transaction_result;
 }
 
 #endif //NRF_MODULE_ENABLED(NRF_SPI_MNGR)

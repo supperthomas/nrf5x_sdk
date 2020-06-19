@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(ANT_BPWR)
@@ -45,7 +45,7 @@
 #include "ant_interface.h"
 #include "ant_bpwr.h"
 
-#define NRF_LOG_MODULE_NAME "ANT_BPWR"
+#define NRF_LOG_MODULE_NAME ant_bpwr
 #if ANT_BPWR_LOG_ENABLED
 #define NRF_LOG_LEVEL       ANT_BPWR_LOG_LEVEL
 #define NRF_LOG_INFO_COLOR  ANT_BPWR_INFO_COLOR
@@ -53,6 +53,7 @@
 #define NRF_LOG_LEVEL       0
 #endif // ANT_BPWR_LOG_ENABLED
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #define BPWR_CALIB_INT_TIMEOUT ((ANT_CLOCK_FREQUENCY * BPWR_CALIBRATION_TIMOUT_S) / BPWR_MSG_PERIOD) // calibration timeout in ant message period's unit
 
@@ -90,7 +91,7 @@ static ret_code_t ant_bpwr_init(ant_bpwr_profile_t         * p_profile,
     p_profile->page_80 = DEFAULT_ANT_COMMON_page80();
     p_profile->page_81 = DEFAULT_ANT_COMMON_page81();
 
-    NRF_LOG_INFO("ANT B-PWR channel %u init\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT B-PWR channel %u init", p_profile->channel_number);
     return ant_channel_init(p_channel_config);
 }
 
@@ -211,7 +212,7 @@ static void sens_message_encode(ant_bpwr_profile_t * p_profile, uint8_t * p_mess
 
     p_bpwr_message_payload->page_number = next_page_number_get(p_profile);
 
-    NRF_LOG_INFO("B-PWR tx page: %u\r\n", p_bpwr_message_payload->page_number);
+    NRF_LOG_INFO("B-PWR tx page: %u", p_bpwr_message_payload->page_number);
 
     switch (p_bpwr_message_payload->page_number)
     {
@@ -284,7 +285,7 @@ static void disp_message_decode(ant_bpwr_profile_t * p_profile, uint8_t * p_mess
     const ant_bpwr_message_layout_t * p_bpwr_message_payload =
         (ant_bpwr_message_layout_t *)p_message_payload;
 
-    NRF_LOG_INFO("B-PWR rx page: %u\r\n", p_bpwr_message_payload->page_number);
+    NRF_LOG_INFO("B-PWR rx page: %u", p_bpwr_message_payload->page_number);
 
     switch (p_bpwr_message_payload->page_number)
     {
@@ -344,7 +345,7 @@ ret_code_t ant_bpwr_calib_request(ant_bpwr_profile_t * p_profile, ant_bpwr_page1
     {
         p_profile->_cb.p_disp_cb->calib_timeout = BPWR_CALIB_INT_TIMEOUT; // initialize watch on calibration's time-out
         p_profile->_cb.p_disp_cb->calib_stat    = BPWR_DISP_CALIB_REQUESTED;
-        NRF_LOG_INFO("Start calibration process\r\n");
+        NRF_LOG_INFO("Start calibration process");
     }
     return err_code;
 }
@@ -395,7 +396,7 @@ static void service_calib(ant_bpwr_profile_t * p_profile, uint8_t event)
                 return;
         }
 
-        NRF_LOG_INFO("End calibration process\r\n");
+        NRF_LOG_INFO("End calibration process");
         p_profile->_cb.p_disp_cb->calib_stat = BPWR_DISP_CALIB_NONE;
 
         p_profile->evt_handler(p_profile, bpwr_event);
@@ -419,7 +420,7 @@ static void ant_message_send(ant_bpwr_profile_t * p_profile)
 
 ret_code_t ant_bpwr_disp_open(ant_bpwr_profile_t * p_profile)
 {
-    NRF_LOG_INFO("ANT B-PWR %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT B-PWR %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
@@ -429,17 +430,17 @@ ret_code_t ant_bpwr_sens_open(ant_bpwr_profile_t * p_profile)
     // Fill tx buffer for the first frame
     ant_message_send(p_profile);
 
-    NRF_LOG_INFO("ANT B-PWR %u open\r\n", p_profile->channel_number);
+    NRF_LOG_INFO("ANT B-PWR %u open", p_profile->channel_number);
     return sd_ant_channel_open(p_profile->channel_number);
 }
 
 
-void ant_bpwr_sens_evt_handler(ant_bpwr_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_bpwr_sens_evt_handler(ant_evt_t * p_ant_event, void * p_context)
 {
+    ant_bpwr_profile_t * p_profile = ( ant_bpwr_profile_t *)p_context;
+
     if (p_ant_event->channel == p_profile->channel_number)
     {
-        ANT_MESSAGE * p_message;
-
         switch (p_ant_event->event)
         {
             case EVENT_TX:
@@ -447,11 +448,9 @@ void ant_bpwr_sens_evt_handler(ant_bpwr_profile_t * p_profile, ant_evt_t * p_ant
                 break;
 
             case EVENT_RX:
-                p_message = (ANT_MESSAGE *)p_ant_event->msg.evt_buffer;
-
-                if (p_message->ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID)
+                if (p_ant_event->message.ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID)
                 {
-                    sens_message_decode(p_profile, p_message->ANT_MESSAGE_aucPayload);
+                    sens_message_decode(p_profile, p_ant_event->message.ANT_MESSAGE_aucPayload);
                 }
                 break;
 
@@ -463,21 +462,21 @@ void ant_bpwr_sens_evt_handler(ant_bpwr_profile_t * p_profile, ant_evt_t * p_ant
 }
 
 
-void ant_bpwr_disp_evt_handler(ant_bpwr_profile_t * p_profile, ant_evt_t * p_ant_event)
+void ant_bpwr_disp_evt_handler(ant_evt_t * p_ant_event, void * p_context)
 {
+    ant_bpwr_profile_t * p_profile = ( ant_bpwr_profile_t *)p_context;
+
     if (p_ant_event->channel == p_profile->channel_number)
     {
-        ANT_MESSAGE * p_message = (ANT_MESSAGE *)p_ant_event->msg.evt_buffer;
-
         switch (p_ant_event->event)
         {
             case EVENT_RX:
 
-                if (p_message->ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
-                    || p_message->ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
-                    || p_message->ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
+                if (p_ant_event->message.ANT_MESSAGE_ucMesgID == MESG_BROADCAST_DATA_ID
+                 || p_ant_event->message.ANT_MESSAGE_ucMesgID == MESG_ACKNOWLEDGED_DATA_ID
+                 || p_ant_event->message.ANT_MESSAGE_ucMesgID == MESG_BURST_DATA_ID)
                 {
-                    disp_message_decode(p_profile, p_message->ANT_MESSAGE_aucPayload);
+                    disp_message_decode(p_profile, p_ant_event->message.ANT_MESSAGE_aucPayload);
                 }
                 break;
 

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -52,7 +52,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "ant_parameters.h"
-#include "ant_stack_handler_types.h"
+#include "nrf_sdh_ant.h"
 #include "ant_channel_config.h"
 #include "ant_request_controller.h"
 #include "ant_sdm_pages.h"
@@ -78,25 +78,25 @@
  * @param[in]  SDM_MSG_PERIOD       Channel period in 32 kHz counts. The SDM profile supports only the following periods:
  *                                  @ref SDM_MSG_PERIOD_4Hz, @ref SDM_MSG_PERIOD_2Hz.
  */
-#define SDM_DISP_CHANNEL_CONFIG_DEF(NAME,                               \
-                                    CHANNEL_NUMBER,                     \
-                                    TRANSMISSION_TYPE,                  \
-                                    DEVICE_NUMBER,                      \
-                                    NETWORK_NUMBER,                     \
-                                    SDM_MSG_PERIOD)                     \
-static const ant_channel_config_t   NAME##_channel_sdm_disp_config =    \
-    {                                                                   \
-        .channel_number     = (CHANNEL_NUMBER),                         \
-        .channel_type       = SDM_DISP_CHANNEL_TYPE,                    \
-        .ext_assign         = SDM_EXT_ASSIGN,                           \
-        .rf_freq            = SDM_ANTPLUS_RF_FREQ,                      \
-        .transmission_type  = (TRANSMISSION_TYPE),                      \
-        .device_type        = SDM_DEVICE_TYPE,                          \
-        .device_number      = (DEVICE_NUMBER),                          \
-        .channel_period     = (SDM_MSG_PERIOD),                         \
-        .network_number     = (NETWORK_NUMBER),                         \
+#define SDM_DISP_CHANNEL_CONFIG_DEF(NAME,                                       \
+                                    CHANNEL_NUMBER,                             \
+                                    TRANSMISSION_TYPE,                          \
+                                    DEVICE_NUMBER,                              \
+                                    NETWORK_NUMBER,                             \
+                                    SDM_MSG_PERIOD)                             \
+static const ant_channel_config_t   CONCAT_2(NAME,_channel_sdm_disp_config) =   \
+    {                                                                           \
+        .channel_number     = (CHANNEL_NUMBER),                                 \
+        .channel_type       = SDM_DISP_CHANNEL_TYPE,                            \
+        .ext_assign         = SDM_EXT_ASSIGN,                                   \
+        .rf_freq            = SDM_ANTPLUS_RF_FREQ,                              \
+        .transmission_type  = (TRANSMISSION_TYPE),                              \
+        .device_type        = SDM_DEVICE_TYPE,                                  \
+        .device_number      = (DEVICE_NUMBER),                                  \
+        .channel_period     = (SDM_MSG_PERIOD),                                 \
+        .network_number     = (NETWORK_NUMBER),                                 \
     }
-#define SDM_DISP_CHANNEL_CONFIG(NAME) &NAME##_channel_sdm_disp_config
+#define SDM_DISP_CHANNEL_CONFIG(NAME) &CONCAT_2(NAME,_channel_sdm_disp_config)
 
 /**@brief Initialize an ANT channel configuration structure for the SDM profile (Sensor).
  *
@@ -106,39 +106,40 @@ static const ant_channel_config_t   NAME##_channel_sdm_disp_config =    \
  * @param[in]  DEVICE_NUMBER        Number of the device assigned to the profile instance.
  * @param[in]  NETWORK_NUMBER       Number of the network assigned to the profile instance.
  */
-#define SDM_SENS_CHANNEL_CONFIG_DEF(NAME,                               \
-                                    CHANNEL_NUMBER,                     \
-                                    TRANSMISSION_TYPE,                  \
-                                    DEVICE_NUMBER,                      \
-                                    NETWORK_NUMBER)                     \
-static const ant_channel_config_t   NAME##_channel_sdm_sens_config =    \
-    {                                                                   \
-        .channel_number     = (CHANNEL_NUMBER),                         \
-        .channel_type       = SDM_SENS_CHANNEL_TYPE,                    \
-        .ext_assign         = SDM_EXT_ASSIGN,                           \
-        .rf_freq            = SDM_ANTPLUS_RF_FREQ,                      \
-        .transmission_type  = (TRANSMISSION_TYPE),                      \
-        .device_type        = SDM_DEVICE_TYPE,                          \
-        .device_number      = (DEVICE_NUMBER),                          \
-        .channel_period     = SDM_MSG_PERIOD_4Hz,                       \
-        .network_number     = (NETWORK_NUMBER),                         \
+#define SDM_SENS_CHANNEL_CONFIG_DEF(NAME,                                       \
+                                    CHANNEL_NUMBER,                             \
+                                    TRANSMISSION_TYPE,                          \
+                                    DEVICE_NUMBER,                              \
+                                    NETWORK_NUMBER)                             \
+static const ant_channel_config_t   CONCAT_2(NAME,_channel_sdm_sens_config) =   \
+    {                                                                           \
+        .channel_number     = (CHANNEL_NUMBER),                                 \
+        .channel_type       = SDM_SENS_CHANNEL_TYPE,                            \
+        .ext_assign         = SDM_EXT_ASSIGN,                                   \
+        .rf_freq            = SDM_ANTPLUS_RF_FREQ,                              \
+        .transmission_type  = (TRANSMISSION_TYPE),                              \
+        .device_type        = SDM_DEVICE_TYPE,                                  \
+        .device_number      = (DEVICE_NUMBER),                                  \
+        .channel_period     = SDM_MSG_PERIOD_4Hz,                               \
+        .network_number     = (NETWORK_NUMBER),                                 \
     }
-#define SDM_SENS_CHANNEL_CONFIG(NAME) &NAME##_channel_sdm_sens_config
+#define SDM_SENS_CHANNEL_CONFIG(NAME) &CONCAT_2(NAME,_channel_sdm_sens_config)
 
 /**@brief Initialize an ANT profile configuration structure for the SDM profile (Display).
  *
  * @param[in]  NAME                         Name of related instance.
  * @param[in]  EVT_HANDLER                  Event handler to be called for handling events in the SDM profile.
  */
-#define SDM_DISP_PROFILE_CONFIG_DEF(NAME,                               \
-                                    EVT_HANDLER)                        \
-static ant_sdm_disp_cb_t            NAME##_sdm_disp_cb;                 \
-static const ant_sdm_disp_config_t  NAME##_profile_sdm_disp_config =    \
-    {                                                                   \
-        .p_cb                       = &NAME##_sdm_disp_cb,              \
-        .evt_handler                = (EVT_HANDLER),                    \
+#define SDM_DISP_PROFILE_CONFIG_DEF(NAME,                                       \
+                                    EVT_HANDLER)                                \
+static ant_sdm_disp_cb_t            CONCAT_2(NAME,_sdm_disp_cb);                \
+static const ant_sdm_disp_config_t  CONCAT_2(NAME,_profile_sdm_disp_config) =   \
+    {                                                                           \
+        .p_cb                       = &CONCAT_2(NAME,_sdm_disp_cb),             \
+        .evt_handler                = (EVT_HANDLER),                            \
     }
-#define SDM_DISP_PROFILE_CONFIG(NAME) &NAME##_profile_sdm_disp_config
+#define SDM_DISP_PROFILE_CONFIG(NAME) &CONCAT_2(NAME,_profile_sdm_disp_config)
+
 
 /**@brief Initialize an ANT profile configuration structure for the SDM profile (Sensor).
  *
@@ -146,17 +147,17 @@ static const ant_sdm_disp_config_t  NAME##_profile_sdm_disp_config =    \
  * @param[in]  SUPPLEMENTARY_PAGE_NUMBER    Supplementary data page (ANT_SDM_PAGE_2 or ANT_SDM_PAGE_3). Use ANT_SDM_PAGE_1 to disable.
  * @param[in]  EVT_HANDLER                  Event handler to be called for handling events in the SDM profile.
  */
-#define SDM_SENS_PROFILE_CONFIG_DEF(NAME,                               \
-                                    SUPPLEMENTARY_PAGE_NUMBER,          \
-                                    EVT_HANDLER)                        \
-static ant_sdm_sens_cb_t            NAME##_sdm_sens_cb;                 \
-static const ant_sdm_sens_config_t  NAME##_profile_sdm_sens_config =    \
-    {                                                                   \
-        .supplementary_page_number  = (SUPPLEMENTARY_PAGE_NUMBER),      \
-        .p_cb                       = &NAME##_sdm_sens_cb,              \
-        .evt_handler                = (EVT_HANDLER),                    \
+#define SDM_SENS_PROFILE_CONFIG_DEF(NAME,                                       \
+                                    SUPPLEMENTARY_PAGE_NUMBER,                  \
+                                    EVT_HANDLER)                                \
+static ant_sdm_sens_cb_t            CONCAT_2(NAME,_sdm_sens_cb);                \
+static const ant_sdm_sens_config_t  CONCAT_2(NAME,_profile_sdm_sens_config) =   \
+    {                                                                           \
+        .supplementary_page_number  = (SUPPLEMENTARY_PAGE_NUMBER),              \
+        .p_cb                       = &CONCAT_2(NAME,_sdm_sens_cb),             \
+        .evt_handler                = (EVT_HANDLER),                            \
     }
-#define SDM_SENS_PROFILE_CONFIG(NAME) &NAME##_profile_sdm_sens_config
+#define SDM_SENS_PROFILE_CONFIG(NAME) &CONCAT_2(NAME,_profile_sdm_sens_config)
 
 
 /**@brief SDM page number type. */
@@ -307,19 +308,19 @@ ret_code_t ant_sdm_page_request(ant_sdm_profile_t * p_profile, ant_common_page70
  *
  * @details This function handles all events from the ANT stack that are of interest to the SDM Sensor profile.
  *
- * @param[in]   p_profile       Pointer to the profile instance.
- * @param[in]   p_ant_event     Event received from the ANT stack.
+ * @param[in]   p_ant_evt     Event received from the ANT stack.
+ * @param[in]   p_context       Pointer to the profile instance.
  */
-void ant_sdm_sens_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_event);
+void ant_sdm_sens_evt_handler(ant_evt_t * p_ant_evt, void * p_context);
 
 /**@brief Function for handling the Display ANT events.
  *
  * @details This function handles all events from the ANT stack that are of interest to the SDM Display profile.
  *
- * @param[in]   p_profile       Pointer to the profile instance.
- * @param[in]   p_ant_event     Event received from the ANT stack.
+ * @param[in]   p_ant_evt     Event received from the ANT stack.
+ * @param[in]   p_context       Pointer to the profile instance.
  */
-void ant_sdm_disp_evt_handler(ant_sdm_profile_t * p_profile, ant_evt_t * p_ant_event);
+void ant_sdm_disp_evt_handler(ant_evt_t * p_ant_evt, void * p_context);
 
 
 #ifdef __cplusplus

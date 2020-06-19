@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble.h"
 #include "ble_gap_evt_conn.h"
@@ -43,11 +43,13 @@
 #include "ble_serialization.h"
 #include "cond_field_serialization.h"
 #include "ble_gap_struct_serialization.h"
+#include "ble_struct_serialization.h"
 #include "conn_ble_gap_sec_keys.h"
 #include "app_util.h"
 
 extern ser_ble_gap_conn_keyset_t m_conn_keys_table[];
 
+#ifndef S112
 uint32_t ble_gap_evt_adv_report_enc(ble_evt_t const * const p_event,
                                     uint32_t                event_len,
                                     uint8_t * const         p_buf,
@@ -58,8 +60,13 @@ uint32_t ble_gap_evt_adv_report_enc(ble_evt_t const * const p_event,
     SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
     SER_PUSH_FIELD(&p_event->evt.gap_evt.params.adv_report, ble_gap_evt_adv_report_t_enc);
 
+#if NRF_SD_BLE_API_VERSION > 5
+    conn_ble_gap_scan_data_unset(false);
+#endif
+
     SER_EVT_ENC_END;
 }
+#endif //!S112
 
 uint32_t ble_gap_evt_auth_key_request_enc(ble_evt_t const * const p_event,
                                           uint32_t                event_len,
@@ -116,6 +123,7 @@ uint32_t ble_gap_evt_conn_param_update_enc(ble_evt_t const * const p_event,
     SER_EVT_ENC_END;
 }
 
+#ifndef S112
 uint32_t ble_gap_evt_conn_param_update_request_enc(ble_evt_t const * const p_event,
                                                    uint32_t                event_len,
                                                    uint8_t * const         p_buf,
@@ -129,6 +137,7 @@ uint32_t ble_gap_evt_conn_param_update_request_enc(ble_evt_t const * const p_eve
 
     SER_EVT_ENC_END;
 }
+#endif //!S112
 
 uint32_t ble_gap_evt_conn_sec_update_enc(ble_evt_t const * const p_event,
                                          uint32_t                event_len,
@@ -168,12 +177,12 @@ uint32_t ble_gap_evt_disconnected_enc(ble_evt_t const * const p_event,
 
     // If disconnected and context is not yet destroyed, destroy it now
     uint32_t conn_index;
-	err_code = conn_ble_gap_sec_context_find(p_event->evt.gap_evt.conn_handle, &conn_index);
-	if (err_code == NRF_SUCCESS)
-	{
-		err_code = conn_ble_gap_sec_context_destroy(p_event->evt.gap_evt.conn_handle);
-		SER_ASSERT(err_code == NRF_SUCCESS, err_code);
-	}
+    err_code = conn_ble_gap_sec_context_find(p_event->evt.gap_evt.conn_handle, &conn_index);
+    if (err_code == NRF_SUCCESS)
+    {
+        err_code = conn_ble_gap_sec_context_destroy(p_event->evt.gap_evt.conn_handle);
+        SER_ASSERT(err_code == NRF_SUCCESS, err_code);
+    }
     err_code = NRF_SUCCESS;
 
     SER_EVT_ENC_END;
@@ -234,6 +243,9 @@ uint32_t ble_gap_evt_rssi_changed_enc(ble_evt_t const * const p_event,
 
     SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
     SER_PUSH_int8(&p_event->evt.gap_evt.params.rssi_changed.rssi);
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+    SER_PUSH_uint8(&p_event->evt.gap_evt.params.rssi_changed.ch_index);
+#endif
 
     SER_EVT_ENC_END;
 }
@@ -246,6 +258,9 @@ uint32_t ble_gap_evt_scan_req_report_enc(ble_evt_t const * const p_event,
     SER_EVT_ENC_BEGIN(BLE_GAP_EVT_SCAN_REQ_REPORT);
 
     SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+    SER_PUSH_uint8(&p_event->evt.gap_evt.params.scan_req_report.adv_handle);
+#endif
     SER_PUSH_FIELD(&p_event->evt.gap_evt.params.scan_req_report.peer_addr, ble_gap_addr_t_enc);
     SER_PUSH_int8(&p_event->evt.gap_evt.params.scan_req_report.rssi);
 
@@ -300,7 +315,12 @@ uint32_t ble_gap_evt_timeout_enc(ble_evt_t const * const p_event,
 
     SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
     SER_PUSH_uint8(&p_event->evt.gap_evt.params.timeout.src);
-
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5 && !defined(S112)
+    if (p_event->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_SCAN)
+    {
+        SER_PUSH_FIELD(&p_event->evt.gap_evt.params.timeout.params.adv_report_buffer, ble_data_t_enc);
+    }
+#endif
     SER_EVT_ENC_END;
 }
 
@@ -319,8 +339,21 @@ uint32_t ble_gap_evt_phy_update_enc(ble_evt_t const * const p_event,
 
     SER_EVT_ENC_END;
 }
+
+uint32_t ble_gap_evt_phy_update_request_enc(ble_evt_t const * const p_event,
+                                            uint32_t                event_len,
+                                            uint8_t * const         p_buf,
+                                            uint32_t * const        p_buf_len)
+{
+    SER_EVT_ENC_BEGIN(BLE_GAP_EVT_PHY_UPDATE_REQUEST);
+
+    SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
+    SER_PUSH_FIELD(&p_event->evt.gap_evt.params.phy_update_request, ble_gap_phys_t_enc);
+
+    SER_EVT_ENC_END;
+}
 #endif
-#if NRF_SD_BLE_API_VERSION >= 4
+#if NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
 uint32_t ble_gap_evt_data_length_update_request_enc(ble_evt_t const * const p_event,
                                  uint32_t                event_len,
                                  uint8_t * const         p_buf,
@@ -345,4 +378,35 @@ uint32_t ble_gap_evt_data_length_update_enc(ble_evt_t const * const p_event,
 
     SER_EVT_ENC_END;
 }
-#endif
+#endif // NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
+
+#if NRF_SD_BLE_API_VERSION > 5
+uint32_t ble_gap_evt_adv_set_terminated_enc(ble_evt_t const * const p_event,
+                                 uint32_t                event_len,
+                                 uint8_t * const         p_buf,
+                                 uint32_t * const        p_buf_len)
+{
+    SER_EVT_ENC_BEGIN(BLE_GAP_EVT_ADV_SET_TERMINATED);
+
+    SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
+
+    SER_PUSH_FIELD(&p_event->evt.gap_evt.params.adv_set_terminated, ble_gap_evt_adv_set_terminated_t_enc);
+
+    SER_EVT_ENC_END;
+}
+#ifndef S112
+uint32_t ble_gap_evt_qos_channel_survey_report_enc(ble_evt_t const * const p_event,
+                                 uint32_t                event_len,
+                                 uint8_t * const         p_buf,
+                                 uint32_t * const        p_buf_len)
+{
+    SER_EVT_ENC_BEGIN(BLE_GAP_EVT_QOS_CHANNEL_SURVEY_REPORT);
+
+    SER_PUSH_uint16(&p_event->evt.gap_evt.conn_handle);
+    SER_PUSH_uint8array((uint8_t *)p_event->evt.gap_evt.params.qos_channel_survey_report.channel_energy,
+                        BLE_GAP_CHANNEL_COUNT);
+
+    SER_EVT_ENC_END;
+}
+#endif //!S112
+#endif//NRF_SD_BLE_API_VERSION > 5

@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef ANT_ENCRYPT_CONFIG__
 #define ANT_ENCRYPT_CONFIG__
@@ -53,7 +53,7 @@
 #include <stdint.h>
 
 #include "sdk_errors.h"
-#include "ant_stack_handler_types.h"
+#include "nrf_sdh_ant.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -206,7 +206,7 @@ ret_code_t ant_channel_encrypt_config_perform(uint8_t                          c
  *
  * @retval NRF_SUCCESS                      If the function completed successfully.
  * @retval NRF_ERROR_INVALID_PARAM          If the channel type is invalid.
- * @retval NRF_ERROR_MODULE_NOT_INITIALZED  If the stack is not configured for encryption.
+ * @retval NRF_ERROR_MODULE_NOT_INITIALIZED  If the stack is not configured for encryption.
  * @retval Other                            Otherwise, the error value returned by the @ref
  *                                          ant_channel_encrypt_config_perform function is returned.
  */
@@ -220,20 +220,6 @@ ret_code_t ant_channel_encrypt_config(uint8_t                          channel_t
  * @param[in] p_crypto_info_set Pointer to the settings.
  */
 ret_code_t ant_stack_encryption_config(ant_encrypt_stack_settings_t const * const p_crypto_info_set);
-
-
-/**
- * @brief Function for handling ANT encryption events.
- *
- * This function should be used directly in the ANT event dispatching process.
- * It serves the ANT encryption events to the registered event handler.
- * If @ref ant_encrypt_negotiation_slave is used, this function is required.
- *
- * This function should be used by the @ref ant_encrypt_config module.
- *
- * @param[in] p_ant_evt  Pointer to the ANT stack event message structure.
- */
-void ant_encrypt_event_handler(ant_evt_t * p_ant_evt);
 
 /**
  * @brief Function for registering an event handler for ANT encryption events.

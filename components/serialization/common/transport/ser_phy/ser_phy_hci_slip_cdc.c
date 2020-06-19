@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2014 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 
 #include <string.h>
@@ -51,8 +51,9 @@
 #include "app_error.h"
 #include "app_util_platform.h"
 
-#define NRF_LOG_MODULE_NAME "CONN"
+#define NRF_LOG_MODULE_NAME sphy_cdc
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #define APP_SLIP_END     0xC0 /**< SLIP code for identifying the beginning and end of a packet frame.. */
 #define APP_SLIP_ESC     0xDB /**< SLIP escape code. This code is used to specify that the following character is specially encoded. */
@@ -73,28 +74,15 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 #define CDC_ACM_DATA_EPIN       NRF_DRV_USBD_EPIN1
 #define CDC_ACM_DATA_EPOUT      NRF_DRV_USBD_EPOUT1
 
-#define CDC_ACM_INTERFACES_CONFIG()                 \
-    APP_USBD_CDC_ACM_CONFIG(CDC_ACM_COMM_INTERFACE, \
-                            CDC_ACM_COMM_EPIN,      \
-                            CDC_ACM_DATA_INTERFACE, \
-                            CDC_ACM_DATA_EPIN,      \
-                            CDC_ACM_DATA_EPOUT)
-
-static const uint8_t m_cdc_acm_class_descriptors[] = {
-        APP_USBD_CDC_ACM_DEFAULT_DESC(CDC_ACM_COMM_INTERFACE,
-                                      CDC_ACM_COMM_EPIN,
-                                      CDC_ACM_DATA_INTERFACE,
-                                      CDC_ACM_DATA_EPIN,
-                                      CDC_ACM_DATA_EPOUT)
-};
-
-/*lint -save -e40 -e26 -e64 -e123 -e505 -e651*/
 APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
-                            CDC_ACM_INTERFACES_CONFIG(),
                             cdc_acm_user_ev_handler,
-                            m_cdc_acm_class_descriptors
+                            CDC_ACM_COMM_INTERFACE,
+                            CDC_ACM_DATA_INTERFACE,
+                            CDC_ACM_COMM_EPIN,
+                            CDC_ACM_DATA_EPIN,
+                            CDC_ACM_DATA_EPOUT,
+                            APP_USBD_CDC_COMM_PROTOCOL_NONE
 );
-/*lint -restore*/
 
 static bool volatile m_port_open;
 
@@ -113,6 +101,7 @@ static uint8_t   m_tx_buf0[NRF_DRV_USBD_EPSIZE];
 static uint8_t   m_tx_buf1[NRF_DRV_USBD_EPSIZE];
 static uint8_t * mp_tx_buf;
 static uint8_t   m_tx_bytes;
+
 static enum {
     PHASE_BEGIN,
     PHASE_HEADER,
@@ -125,6 +114,7 @@ static enum {
     PHASE_PRE_IDLE = PHASE_PACKET_END + 1,
     PHASE_IDLE     = PHASE_PRE_IDLE + 1
 } volatile m_tx_phase;
+
 static bool volatile m_tx_in_progress;
 static bool volatile m_tx_pending;
 
@@ -143,38 +133,9 @@ static uint8_t * mp_big_buffer   = NULL;
 static uint8_t * mp_buffer       = NULL;
 static uint32_t  m_rx_index;
 
-static uint8_t m_rx_buf[NRF_DRV_USBD_EPSIZE];
+static uint8_t m_rx_byte;
 static bool m_rx_escape;
 
-#define SERIAL_NUMBER_STRING_SIZE (16)
-uint16_t g_extern_serial_number[SERIAL_NUMBER_STRING_SIZE + 1];
-
-static void serial_number_string_create(void)
-{
-    g_extern_serial_number[0] = (uint16_t)APP_USBD_DESCRIPTOR_STRING << 8 |
-                                          sizeof(g_extern_serial_number);
-
-    uint32_t dev_id_hi = NRF_FICR->DEVICEID[1];
-    uint32_t dev_id_lo = NRF_FICR->DEVICEID[0];
-    uint64_t device_id = (((uint64_t)dev_id_hi) << 32) | dev_id_lo;
-
-    for (size_t i = SERIAL_NUMBER_STRING_SIZE; i > 0; --i)
-    {
-        uint8_t nibble = (uint8_t)(device_id & 0xF);
-        device_id >>= 4;
-
-        uint8_t hex_digit;
-        if (nibble >= 10)
-        {
-            hex_digit = 'A' + (nibble - 10);
-        }
-        else
-        {
-            hex_digit = '0' + nibble;
-        }
-        g_extern_serial_number[i] = hex_digit;
-    }
-}
 
 // The function returns false to signal that no more bytes can be passed to be
 // sent (put into the TX buffer) until UART transmission is done.
@@ -243,6 +204,7 @@ static void tx_buf_fill(void)
         {
             can_continue = tx_buf_put(tx_escaped_data);
             tx_escaped_data = 0;
+            ++m_tx_index;
         }
         else switch (m_tx_phase)
         {
@@ -287,21 +249,26 @@ static void tx_buf_fill(void)
 
         default:
             ASSERT(mp_tx_data->p_buffer != NULL);
-            uint8_t data = mp_tx_data->p_buffer[m_tx_index];
-            ++m_tx_index;
-
-            if (data == APP_SLIP_END)
+            if (m_tx_index < mp_tx_data->num_of_bytes)
             {
-                data = APP_SLIP_ESC;
-                tx_escaped_data = APP_SLIP_ESC_END;
-            }
-            else if (data == APP_SLIP_ESC)
-            {
-                tx_escaped_data = APP_SLIP_ESC_ESC;
-            }
-            can_continue = tx_buf_put(data);
+                uint8_t data = mp_tx_data->p_buffer[m_tx_index];
 
-            if (m_tx_index >= mp_tx_data->num_of_bytes)
+                if (data == APP_SLIP_END)
+                {
+                    data = APP_SLIP_ESC;
+                    tx_escaped_data = APP_SLIP_ESC_END;
+                }
+                else if (data == APP_SLIP_ESC)
+                {
+                    tx_escaped_data = APP_SLIP_ESC_ESC;
+                }
+                else
+                {
+                    ++m_tx_index;
+                }
+                can_continue = tx_buf_put(data);
+            }
+            else
             {
                 mp_tx_data->p_buffer = NULL;
 
@@ -635,17 +602,35 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
     switch (event)
     {
     case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN:
-        NRF_LOG_DEBUG("EVT_PORT_OPEN\r\n");
+        NRF_LOG_DEBUG("EVT_PORT_OPEN");
         if (!m_port_open)
         {
+            ret_code_t ret_code;
+
             m_port_open = true;
-            APP_ERROR_CHECK(app_usbd_cdc_acm_read(p_cdc_acm,
-                m_rx_buf, sizeof(m_rx_buf)));
+
+            do {
+                ret_code = app_usbd_cdc_acm_read(p_cdc_acm, &m_rx_byte, 1);
+                if (ret_code == NRF_SUCCESS)
+                {
+                    ser_phi_hci_rx_byte(m_rx_byte);
+                }
+                else if (ret_code != NRF_ERROR_IO_PENDING)
+                {
+                    APP_ERROR_CHECK(ret_code);
+                }
+            } while (ret_code == NRF_SUCCESS);
         }
         break;
 
     case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
-        NRF_LOG_DEBUG("EVT_PORT_CLOSE\r\n");
+        NRF_LOG_DEBUG("EVT_PORT_CLOSE");
+        if (m_tx_in_progress)
+        {
+            m_ser_phy_hci_slip_event.evt_type = SER_PHY_HCI_SLIP_EVT_PKT_SENT;
+            m_ser_phy_hci_slip_event_handler(&m_ser_phy_hci_slip_event);
+            m_tx_in_progress = false;
+        }
         m_port_open = false;
         break;
 
@@ -689,13 +674,13 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 
     case APP_USBD_CDC_ACM_USER_EVT_RX_DONE:
         {
-            size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
-            for (size_t i = 0; i < size; ++i)
+            ret_code_t ret_code;
+            do
             {
-                ser_phi_hci_rx_byte(m_rx_buf[i]);
-            }
-            APP_ERROR_CHECK(app_usbd_cdc_acm_read(p_cdc_acm,
-                m_rx_buf, sizeof(m_rx_buf)));
+                ser_phi_hci_rx_byte(m_rx_byte);
+
+                ret_code = app_usbd_cdc_acm_read(p_cdc_acm, &m_rx_byte, 1);
+            } while (ret_code == NRF_SUCCESS);
         }
         break;
 
@@ -704,26 +689,18 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
 }
 
-static void clock_event_handler(nrf_drv_clock_evt_type_t event)
+void ser_phy_hci_slip_reset(void)
 {
-    ASSERT(event == NRF_DRV_CLOCK_EVT_HFCLK_STARTED);
-    (void)event;
+    mp_tx_buf        = m_tx_buf0;
+    m_tx_bytes       = 0;
+    m_tx_phase       = PHASE_IDLE;
+    m_tx_in_progress = false;
+    m_tx_pending     = false;
 
-    NRF_LOG_DEBUG("Clock started\r\n");
-
-    APP_ERROR_CHECK(app_usbd_init(NULL));
-    APP_ERROR_CHECK(app_usbd_class_append(
-        app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm)));
-
-    app_usbd_enable();
-    app_usbd_start();
-
-    NRF_LOG_DEBUG("USB started\r\n");
+    m_rx_escape      = false;
+    mp_small_buffer  = m_small_buffer;
+    mp_big_buffer    = m_big_buffer;
 }
-static nrf_drv_clock_handler_item_t m_clock_handler_item = {
-    NULL,
-    clock_event_handler
-};
 
 uint32_t ser_phy_hci_slip_open(ser_phy_hci_slip_event_handler_t events_handler)
 {
@@ -738,22 +715,17 @@ uint32_t ser_phy_hci_slip_open(ser_phy_hci_slip_event_handler_t events_handler)
         return NRF_ERROR_INVALID_STATE;
     }
 
-    serial_number_string_create();
+    ret_code_t ret = app_usbd_class_append(
+        app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm));
+    if (ret != NRF_SUCCESS)
+    {
+        return ret;
+    }
 
-    (void)nrf_drv_clock_init();
-    nrf_drv_clock_hfclk_request(&m_clock_handler_item);
 
     m_ser_phy_hci_slip_event_handler = events_handler;
 
-    mp_tx_buf        = m_tx_buf0;
-    m_tx_bytes       = 0;
-    m_tx_phase       = PHASE_IDLE;
-    m_tx_in_progress = false;
-    m_tx_pending     = false;
-
-    m_rx_escape      = false;
-    mp_small_buffer  = m_small_buffer;
-    mp_big_buffer    = m_big_buffer;
+    ser_phy_hci_slip_reset();
 
     return NRF_SUCCESS;
 }
@@ -761,10 +733,5 @@ uint32_t ser_phy_hci_slip_open(ser_phy_hci_slip_event_handler_t events_handler)
 
 void ser_phy_hci_slip_close(void)
 {
-    app_usbd_stop();
-    app_usbd_disable();
-    (void)app_usbd_uninit();
-    nrf_drv_clock_hfclk_release();
-
     m_ser_phy_hci_slip_event_handler = NULL;
 }

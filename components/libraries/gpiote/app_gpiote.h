@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -70,6 +70,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "nrf.h"
+#include "nrf_drv_gpiote.h"
 #include "app_error.h"
 #include "app_util.h"
 
@@ -95,6 +96,32 @@ typedef void (*app_gpiote_event_handler_t)(uint32_t const * p_event_pins_low_to_
 
 /**@brief GPIOTE input event handler type. */
 typedef void (*app_gpiote_input_event_handler_t)(void);
+
+
+/* Make the pin config descriptor packed */
+#pragma pack(push, 1)
+
+/**
+ * @brief Single pin configuration
+ *
+ * Structure used to describe single pin configuration
+ * when registering user.
+ * @sa app_gpiote_user_register_ex
+ */
+typedef struct
+{
+    /** Pin number to observe */
+    uint32_t              pin_number  : VBITS(NRF_GPIO_PIN_MAP(GPIO_COUNT - 1, 31));
+    /** Transition to observe */
+    nrf_gpiote_polarity_t sense       : 2;
+} app_gpiote_user_pin_config_t;
+
+// Check if we can fitt all the nrf_gpiote_polarity_t values into 2 bits field
+STATIC_ASSERT(NRF_GPIOTE_POLARITY_LOTOHI <= 3);
+STATIC_ASSERT(NRF_GPIOTE_POLARITY_HITOLO <= 3);
+STATIC_ASSERT(NRF_GPIOTE_POLARITY_TOGGLE <= 3);
+
+#pragma pack(pop)
 
 /**@brief Macro for initializing the GPIOTE module.
  *
@@ -144,19 +171,53 @@ uint32_t app_gpiote_init(uint8_t max_users, void * p_buffer);
  *                                      from high->low. Size of array depends on number of ports
  *                                      in the device.
  * @param[in]   event_handler           Pointer to function to be executed when an event occurs.
+ *                                      Cannot be NULL.
  *
  * @retval      NRF_SUCCESS             Successful initialization.
- * @retval      NRF_ERROR_INVALID_PARAM Invalid parameter (buffer not aligned to a 4 byte boundary).
  * @retval      NRF_ERROR_INALID_STATE  If @ref app_gpiote_init has not been called on the GPIOTE
  *                                      module.
  * @retval      NRF_ERROR_NO_MEM        Returned if the application tries to register more users
  *                                      than defined when the GPIOTE module was initialized in
  *                                      @ref app_gpiote_init.
+ *
+ * @note The function can also return error codes from internally
+ * called @ref nrf_drv_gpiote_in_init
+ *
+ * @sa app_gpiote_user_register_ex
  */
 uint32_t app_gpiote_user_register(app_gpiote_user_id_t *     p_user_id,
                                   uint32_t const *           p_pins_low_to_high_mask,
                                   uint32_t const *           p_pins_high_to_low_mask,
                                   app_gpiote_event_handler_t event_handler);
+
+/**@brief Function for registering GPIOTE user using pins configuration list.
+ *
+ * Function for registering GPIOTE user that uses array of pins configuration.
+ * This function do not change pins configuration.
+ * Pins must be configured before calling this function.
+ *
+ * @param[out]  p_user_id      Id for the new GPIOTE user.
+ * @param[in]   p_pins_config  Pointer to the array of pins configuration for the user.
+ * @param[in]   pin_count      Number of pins to configure for the user.
+ * @param[in]   event_handler  Pointer to function to be executed when an event occurs.
+ *                             Cannot be NULL.
+ *
+ * @retval      NRF_SUCCESS             Successful user registration.
+ * @retval      NRF_ERROR_INVALID_STATE If @ref app_gpiote_init has not been called before calling
+ *                                      this function.
+ * @retval      NRF_ERROR_NO_MEM        Returned if the application tries to register more users
+ *                                      than defined when the GPIOTE module was initialized in
+ *                                      @ref app_gpiote_init.
+ *
+ * @note The function can also return error codes from internally
+ * called @ref nrf_drv_gpiote_in_init
+ *
+ * @sa app_gpiote_user_register
+ */
+uint32_t app_gpiote_user_register_ex(app_gpiote_user_id_t * p_user_id,
+                                     app_gpiote_user_pin_config_t const * p_pins_config,
+                                     size_t pin_count,
+                                     app_gpiote_event_handler_t event_handler);
 
 /**@brief Function for informing the GPIOTE module that the specified user wants to use the GPIOTE module.
  *

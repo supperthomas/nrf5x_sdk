@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2013 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2013 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef BLE_GAP_APP_H__
 #define BLE_GAP_APP_H__
@@ -55,6 +55,7 @@
 extern "C" {
 #endif
 
+#if defined(NRF_SD_BLE_API_VERSION) && (NRF_SD_BLE_API_VERSION <= 5)
 /**
  * @brief Encodes @ref sd_ble_gap_adv_data_set command request.
  *
@@ -62,11 +63,11 @@ extern "C" {
  *
  * @param[in] p_data         Raw data to be placed in advertisement packet. If NULL, no changes
  *                           are made to the current advertisement packet data.
- * @param[in] dlen           Data length for p_data. Max size: @ref BLE_GAP_ADV_MAX_SIZE octets.
+ * @param[in] dlen           Data length for p_data. Max size: @ref BLE_GAP_ADV_SR_MAX_LEN_DEFAULT octets.
  *                           Should be 0 if p_data is NULL, can be 0 if p_data is not NULL.
  * @param[in] p_sr_data      Raw data to be placed in scan response packet. If NULL,
  *                           no changes are made to the current scan response packet data.
- * @param[in] srdlen         Data length for p_sr_data. Max size: @ref BLE_GAP_ADV_MAX_SIZE octets.
+ * @param[in] srdlen         Data length for p_sr_data. Max size: @ref BLE_GAP_ADV_SR_MAX_LEN_DEFAULT octets.
  *                           Should be 0 if p_sr_data is NULL, can be 0 if p_data is not NULL.
  * @param[in] p_buf          Pointer to buffer where encoded data command will be returned.
  * @param[in,out] p_buf_len  \c in: Size of \p p_buf buffer.
@@ -101,6 +102,7 @@ uint32_t ble_gap_adv_data_set_req_enc(uint8_t const * const p_data,
 uint32_t ble_gap_adv_data_set_rsp_dec(uint8_t const * const p_buf,
                                       uint32_t              packet_len,
                                       uint32_t * const      p_result_code);
+#endif
 
 /**
  * @brief Encodes @ref sd_ble_gap_adv_start command request.
@@ -116,7 +118,12 @@ uint32_t ble_gap_adv_data_set_rsp_dec(uint8_t const * const p_buf,
  * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
  * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
  */
-uint32_t ble_gap_adv_start_req_enc(ble_gap_adv_params_t const * const p_adv_params,
+uint32_t ble_gap_adv_start_req_enc(
+#if NRF_SD_BLE_API_VERSION > 5
+                                   uint8_t adv_handle,
+#else
+                                   ble_gap_adv_params_t const * const p_adv_params,
+#endif
 #if NRF_SD_BLE_API_VERSION >= 4
                                    uint8_t                            conn_cfg_tag,
 #endif
@@ -156,7 +163,11 @@ uint32_t ble_gap_adv_start_rsp_dec(uint8_t const * const p_buf,
  * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
  * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
  */
-uint32_t ble_gap_tx_power_set_req_enc(int8_t           tx_power,
+uint32_t ble_gap_tx_power_set_req_enc(
+#if NRF_SD_BLE_API_VERSION > 5
+                                      uint8_t role, uint16_t handle,
+#endif
+                                      int8_t           tx_power,
                                       uint8_t * const  p_buf,
                                       uint32_t * const p_buf_len);
 
@@ -725,7 +736,12 @@ uint32_t ble_gap_authenticate_rsp_dec(uint8_t const * const p_buf,
  * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
  * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
  */
-uint32_t ble_gap_adv_stop_req_enc(uint8_t * const p_buf, uint32_t * const p_buf_len);
+uint32_t ble_gap_adv_stop_req_enc(
+#if NRF_SD_BLE_API_VERSION > 5
+                                  uint8_t adv_handle,
+#endif
+                                  uint8_t * const  p_buf,
+                                  uint32_t * const p_buf_len);
 
 /**@brief Decodes response to @ref sd_ble_gap_adv_stop command.
  *
@@ -824,7 +840,7 @@ uint32_t ble_gap_rssi_start_req_enc(uint16_t         conn_handle,
 uint32_t ble_gap_rssi_start_rsp_dec(uint8_t const * const p_buf,
                                     uint32_t              packet_len,
                                     uint32_t * const      p_result_code);
-
+#ifndef S112
 /**@brief Encodes @ref sd_ble_gap_scan_stop command request.
  *
  * @sa @ref ble_gap_scan_stop_rsp_dec for command response decoder.
@@ -871,6 +887,9 @@ uint32_t ble_gap_scan_stop_rsp_dec(uint8_t const * const p_buf,
  * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
  */
 uint32_t ble_gap_scan_start_req_enc(ble_gap_scan_params_t const *  p_scan_params,
+#if defined(NRF_SD_BLE_API_VERSION) && NRF_SD_BLE_API_VERSION > 5
+                                    ble_data_t const *             p_adv_report_buffer,
+#endif
                                     uint8_t * const                p_buf,
                                     uint32_t * const               p_buf_len);
 
@@ -1008,6 +1027,7 @@ uint32_t ble_gap_encrypt_req_enc(uint16_t                          conn_handle,
 uint32_t ble_gap_encrypt_rsp_dec(uint8_t const * const p_buf,
                                  uint32_t              packet_len,
                                  uint32_t      * const p_result_code);
+#endif //!S112
 
 /**@brief Encodes @ref sd_ble_gap_rssi_get command request.
  *
@@ -1025,6 +1045,9 @@ uint32_t ble_gap_encrypt_rsp_dec(uint8_t const * const p_buf,
  */
 uint32_t ble_gap_rssi_get_req_enc(uint16_t             conn_handle,
                                   int8_t const * const p_rssi,
+#if NRF_SD_BLE_API_VERSION > 5
+                                  uint8_t const * const p_ch_index,
+#endif
                                   uint8_t  * const     p_buf,
                                   uint32_t * const     p_buf_len);
 
@@ -1046,7 +1069,10 @@ uint32_t ble_gap_rssi_get_req_enc(uint16_t             conn_handle,
 uint32_t ble_gap_rssi_get_rsp_dec(uint8_t const * const p_buf,
                                   uint32_t              packet_len,
                                   int8_t * const        p_rssi,
-                                  uint32_t      * const p_result_code);
+#if NRF_SD_BLE_API_VERSION > 5
+                                  uint8_t * const        p_ch_index,
+#endif
+                                  uint32_t * const      p_result_code);
 
 /**@brief Encodes @ref sd_ble_gap_keypress_notify command request.
  *
@@ -1436,7 +1462,7 @@ uint32_t ble_gap_device_identities_set_rsp_dec(uint8_t const * const p_buf,
                                        uint32_t              packet_len,
                                        uint32_t * const      p_result_code);
 
-#if NRF_SD_BLE_API_VERSION >= 4
+#if NRF_SD_BLE_API_VERSION >= 4 && !defined(S112)
 /**
  * @brief Encodes @ref sd_ble_gap_data_length_update command request.
  *
@@ -1481,9 +1507,9 @@ uint32_t ble_gap_data_length_update_rsp_dec(uint8_t const * const              p
 #endif
 
 #if NRF_SD_BLE_API_VERSION >= 5
-/**@brief Encodes @ref sd_ble_gap_phy_request command request.
+/**@brief Encodes @ref sd_ble_gap_phy_update command request.
  *
- * @sa @ref ble_gap_phy_request_rsp_dec for command response decoder.
+ * @sa @ref ble_gap_phy_update_rsp_dec for command response decoder.
  *
  * @param[in]      conn_handle    Connection handle of the connection.
  * @param[in]      p_gap_phys     Pointer to a @ref ble_gap_phys_t
@@ -1496,14 +1522,14 @@ uint32_t ble_gap_data_length_update_rsp_dec(uint8_t const * const              p
  * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
  * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
  */
-uint32_t ble_gap_phy_request_req_enc(uint16_t               conn_handle,
+uint32_t ble_gap_phy_update_req_enc(uint16_t               conn_handle,
                                      ble_gap_phys_t const * p_gap_phys,
                                      uint8_t * const        p_buf,
                                      uint32_t * const       p_buf_len);
 
-/**@brief Decodes response to @ref sd_ble_gap_phy_request command.
+/**@brief Decodes response to @ref sd_ble_gap_phy_update command.
  *
- * @sa @ref ble_gap_phy_request_req_enc for command request encoder.
+ * @sa @ref ble_gap_phy_update_req_enc for command request encoder.
  *
  * @param[in]  p_buf           Pointer to beginning of command response packet.
  * @param[in]  packet_len      Length (in bytes) of response packet.
@@ -1515,12 +1541,125 @@ uint32_t ble_gap_phy_request_req_enc(uint16_t               conn_handle,
  * @retval NRF_ERROR_INVALID_DATA   Decoding failure. Decoded operation code does not match expected
  *                                  operation code.
  */
-uint32_t ble_gap_phy_request_rsp_dec(uint8_t const * const p_buf,
+uint32_t ble_gap_phy_update_rsp_dec(uint8_t const * const p_buf,
                                      uint32_t              packet_len,
                                      uint32_t * const      p_result_code);
 #endif
-/** @} */
 
+#if NRF_SD_BLE_API_VERSION >= 6
+/**@brief Encodes @ref sd_ble_gap_adv_set_configure command request.
+ *
+ * @sa @ref ble_gap_adv_set_configure_rsp_dec for command response decoder.
+ *
+ * @param[in]      p_adv_handle   Advertising handle.
+ * @param[in]      p_adv_data     Pointer to a @ref ble_gap_adv_data_t structure.
+ * @param[in]      p_adv_params   Pointer to a @ref ble_gap_adv_params_t structure.
+ * @param[in]      p_buf          Pointer to buffer where encoded data command will be returned.
+ * @param[in, out] p_buf_len      \c in: size of \p p_buf buffer.
+ *                                \c out: Length of encoded command packet.
+ *
+ * @retval NRF_SUCCESS                Encoding success.
+ * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
+ */
+uint32_t ble_gap_adv_set_configure_req_enc(uint8_t *                   p_adv_handle,
+                                           ble_gap_adv_data_t const *  p_adv_data,
+                                           ble_gap_adv_params_t const *p_adv_params,
+                                           uint8_t * const             p_buf,
+                                           uint32_t * const            p_buf_len);
+
+
+/**@brief Decodes response to @ref sd_ble_gap_adv_set_configure command.
+ *
+ * @sa @ref ble_gap_adv_set_configure_req_enc for command request encoder.
+ *
+ * @param[in]  p_buf           Pointer to beginning of command response packet.
+ * @param[in]  packet_len      Length (in bytes) of response packet.
+ * @param[out] p_adv_handle    Advertising handle.
+ * @param[out] p_result_code   Command response result code.
+ *
+ * @retval NRF_SUCCESS              Decoding success.
+ * @retval NRF_ERROR_NULL           Decoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_DATA_SIZE      Decoding failure. Incorrect buffer length.
+ * @retval NRF_ERROR_INVALID_DATA   Decoding failure. Decoded operation code does not match expected
+ *                                  operation code.
+ */
+uint32_t ble_gap_adv_set_configure_rsp_dec(uint8_t const * const  p_buf,
+                                           uint32_t               packet_len,
+                                           uint8_t *              p_adv_handle,
+                                           uint32_t * const       p_result_code);
+
+/**@brief Encodes @ref sd_ble_gap_qos_channel_survey_start command request.
+ *
+ * @sa @ref ble_gap_qos_channel_survey_start_rsp_dec for command response decoder.
+ *
+ * @param[in]      interval_us    Interval.
+ * @param[in]      p_buf          Pointer to buffer where encoded data command will be returned.
+ * @param[in, out] p_buf_len      \c in: size of \p p_buf buffer.
+ *                                \c out: Length of encoded command packet.
+ *
+ * @retval NRF_SUCCESS                Encoding success.
+ * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
+ */
+uint32_t ble_gap_qos_channel_survey_start_req_enc(uint32_t                interval_us,
+                                                  uint8_t * const         p_buf,
+                                                  uint32_t * const        p_buf_len);
+
+
+/**@brief Decodes response to @ref sd_ble_gap_qos_channel_survey_start command.
+ *
+ * @sa @ref ble_gap_qos_channel_survey_start_req_enc for command request encoder.
+ *
+ * @param[in]  p_buf           Pointer to beginning of command response packet.
+ * @param[in]  packet_len      Length (in bytes) of response packet.
+ * @param[out] p_result_code   Command response result code.
+ *
+ * @retval NRF_SUCCESS              Decoding success.
+ * @retval NRF_ERROR_NULL           Decoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_DATA_SIZE      Decoding failure. Incorrect buffer length.
+ * @retval NRF_ERROR_INVALID_DATA   Decoding failure. Decoded operation code does not match expected
+ *                                  operation code.
+ */
+uint32_t ble_gap_qos_channel_survey_start_rsp_dec(uint8_t const * const p_buf,
+                                                  uint32_t              packet_len,
+                                                  uint32_t * const      p_result_code);
+
+/**@brief Encodes @ref sd_ble_gap_qos_channel_survey_stop command request.
+ *
+ * @sa @ref ble_gap_qos_channel_survey_stop_rsp_dec for command response decoder.
+ *
+ * @param[in]      p_buf          Pointer to buffer where encoded data command will be returned.
+ * @param[in, out] p_buf_len      \c in: size of \p p_buf buffer.
+ *                                \c out: Length of encoded command packet.
+ *
+ * @retval NRF_SUCCESS                Encoding success.
+ * @retval NRF_ERROR_NULL             Encoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_INVALID_LENGTH   Encoding failure. Incorrect buffer length.
+ */
+uint32_t ble_gap_qos_channel_survey_stop_req_enc(uint8_t * const         p_buf,
+                                                 uint32_t * const        p_buf_len);
+
+
+/**@brief Decodes response to @ref sd_ble_gap_qos_channel_survey_stop command.
+ *
+ * @sa @ref ble_gap_qos_channel_survey_stop_req_enc for command request encoder.
+ *
+ * @param[in]  p_buf           Pointer to beginning of command response packet.
+ * @param[in]  packet_len      Length (in bytes) of response packet.
+ * @param[out] p_result_code   Command response result code.
+ *
+ * @retval NRF_SUCCESS              Decoding success.
+ * @retval NRF_ERROR_NULL           Decoding failure. NULL pointer supplied.
+ * @retval NRF_ERROR_DATA_SIZE      Decoding failure. Incorrect buffer length.
+ * @retval NRF_ERROR_INVALID_DATA   Decoding failure. Decoded operation code does not match expected
+ *                                  operation code.
+ */
+uint32_t ble_gap_qos_channel_survey_stop_rsp_dec(uint8_t const * const p_buf,
+                                                 uint32_t              packet_len,
+                                                 uint32_t * const      p_result_code);
+#endif
+/** @} */
 #ifdef __cplusplus
 }
 #endif

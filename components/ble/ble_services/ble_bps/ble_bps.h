@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /** @file
  *
@@ -49,8 +49,13 @@
  *          If an event handler is supplied by the application, the Blood Pressure
  *          Service will generate Blood Pressure Service events to the application.
  *
- * @note The application must propagate BLE stack events to the Blood Pressure Service
- *       module by calling ble_bps_on_ble_evt() from the @ref softdevice_handler function.
+ * @note    The application must register this module as BLE event observer using the
+ *          NRF_SDH_BLE_OBSERVER macro. Example:
+ *          @code
+ *              ble_bps_t instance;
+ *              NRF_SDH_BLE_OBSERVER(anything, BLE_BPS_BLE_OBSERVER_PRIO,
+ *                                   ble_bps_on_ble_evt, &instance);
+ *          @endcode
  *
  * @note Attention!
  *  To maintain compliance with Nordic Semiconductor ASA Bluetooth profile
@@ -65,10 +70,24 @@
 #include "ble.h"
 #include "ble_srv_common.h"
 #include "ble_date_time.h"
+#include "nrf_sdh_ble.h"
+#include "nrf_ble_gq.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**@brief   Macro for defining a ble_bps instance.
+ *
+ * @param   _name   Name of the instance.
+ * @hideinitializer
+ */
+#define BLE_BPS_DEF(_name)                                                                          \
+static ble_bps_t _name;                                                                             \
+NRF_SDH_BLE_OBSERVER(_name ## _obs,                                                                 \
+                     BLE_BPS_BLE_OBSERVER_PRIO,                                                     \
+                     ble_bps_on_ble_evt, &_name)
+
 
 // Blood Pressure Feature bits
 #define BLE_BPS_FEATURE_BODY_MOVEMENT_BIT               (0x01 << 0)         /**< Body Movement Detection Support bit. */
@@ -77,6 +96,7 @@ extern "C" {
 #define BLE_BPS_FEATURE_PULSE_RATE_RANGE_BIT            (0x01 << 3)         /**< Pulse Rate Range Detection Support bit. */
 #define BLE_BPS_FEATURE_MEASUREMENT_POSITION_BIT        (0x01 << 4)         /**< Measurement Position Detection Support bit. */
 #define BLE_BPS_FEATURE_MULTIPLE_BOND_BIT               (0x01 << 5)         /**< Multiple Bond Support bit. */
+
 
 /**@brief Blood Pressure Service event type. */
 typedef enum
@@ -111,9 +131,11 @@ typedef struct
 typedef struct
 {
     ble_bps_evt_handler_t        evt_handler;                               /**< Event handler to be called for handling events in the Blood Pressure Service. */
-    ble_srv_cccd_security_mode_t bps_meas_attr_md;                          /**< Initial security level for blood pressure measurement attribute */
-    ble_srv_security_mode_t      bps_feature_attr_md;                       /**< Initial security level for blood pressure feature attribute */
+    ble_srv_error_handler_t      error_handler;                             /**< Function to be called in case of an error. */
+    security_req_t               bp_cccd_wr_sec;                            /**< Security requirement for writing blood pressure measurement characteristic CCCD. */
+    security_req_t               bp_feature_rd_sec;                         /**< Security requirement for reading the blood pressure feature characteristic. */
     uint16_t                     feature;                                   /**< Initial value for blood pressure feature */
+    nrf_ble_gq_t               * p_gatt_queue;                              /**< Pointer to BLE GATT Queue instance. */
 } ble_bps_init_t;
 
 /**@brief Blood Pressure Service structure. This contains various status information for
@@ -121,11 +143,13 @@ typedef struct
 struct ble_bps_s
 {
     ble_bps_evt_handler_t        evt_handler;                               /**< Event handler to be called for handling events in the Blood Pressure Service. */
+    ble_srv_error_handler_t      error_handler;                             /**< Function to be called in case of an error. */
     uint16_t                     service_handle;                            /**< Handle of Blood Pressure Service (as provided by the BLE stack). */
     ble_gatts_char_handles_t     meas_handles;                              /**< Handles related to the Blood Pressure Measurement characteristic. */
     ble_gatts_char_handles_t     feature_handles;                           /**< Handles related to the Blood Pressure Feature characteristic. */
     uint16_t                     conn_handle;                               /**< Handle of the current connection (as provided by the BLE stack, is BLE_CONN_HANDLE_INVALID if not in a connection). */
     uint16_t                     feature;                                   /**< Value of Blood Pressure feature. */
+    nrf_ble_gq_t               * p_gatt_queue;                              /**< Pointer to BLE GATT Queue instance. */
 };
 
 /**@brief Blood Pressure Service measurement structure. This contains a Blood Pressure
@@ -146,6 +170,7 @@ typedef struct ble_bps_meas_s
     uint16_t                     measurement_status;                        /**< Measurement Status. */
 } ble_bps_meas_t;
 
+
 /**@brief Function for initializing the Blood Pressure Service.
  *
  * @param[out]  p_bps       Blood Pressure Service structure. This structure will have to
@@ -155,16 +180,18 @@ typedef struct ble_bps_meas_s
  *
  * @return      NRF_SUCCESS on successful initialization of service, otherwise an error code.
  */
-uint32_t ble_bps_init(ble_bps_t * p_bps, const ble_bps_init_t * p_bps_init);
+uint32_t ble_bps_init(ble_bps_t * p_bps, ble_bps_init_t const * p_bps_init);
+
 
 /**@brief Function for handling the Application's BLE Stack events.
  *
  * @details Handles all events from the BLE stack of interest to the Blood Pressure Service.
  *
- * @param[in]   p_bps      Blood Pressure Service structure.
- * @param[in]   p_ble_evt  Event received from the BLE stack.
+ * @param[in]   p_ble_evt   Event received from the BLE stack.
+ * @param[in]   p_context   Blood Pressure Service structure.
  */
-void ble_bps_on_ble_evt(ble_bps_t * p_bps, ble_evt_t * p_ble_evt);
+void ble_bps_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
+
 
 /**@brief Function for sending blood pressure measurement if indication has been enabled.
  *
@@ -178,6 +205,7 @@ void ble_bps_on_ble_evt(ble_bps_t * p_bps, ble_evt_t * p_ble_evt);
  * @return      NRF_SUCCESS on success, otherwise an error code.
  */
 uint32_t ble_bps_measurement_send(ble_bps_t * p_bps, ble_bps_meas_t * p_bps_meas);
+
 
 /**@brief Function for checking if indication of Blood Pressure Measurement is currently enabled.
  *

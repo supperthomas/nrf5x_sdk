@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef PEER_ID_MANAGER_H__
 #define PEER_ID_MANAGER_H__
@@ -45,6 +45,7 @@
 #include "ble.h"
 #include "ble_gap.h"
 #include "peer_manager_types.h"
+#include "peer_manager_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,50 +62,11 @@ extern "C" {
  */
 
 
-/**@brief Events that can come from the ID Manager module.
- */
-typedef enum
-{
-    IM_EVT_DUPLICATE_ID,          /**< The ID Manager module has detected that two stored peers represent the same peer. */
-    IM_EVT_BONDED_PEER_CONNECTED, /**< A connected peer has been identified as one of the bonded peers. This can happen immediately on connection, or at a later time. */
-} im_evt_id_t;
-
-
-typedef struct
-{
-    im_evt_id_t evt_id;
-    uint16_t    conn_handle;
-    union
-    {
-        struct
-        {
-            pm_peer_id_t peer_id_1;
-            pm_peer_id_t peer_id_2;
-        } duplicate_id;
-    } params;
-} im_evt_t;
-
-
-/**@brief Event handler for events from the ID Manager module.
- *
- * @param[in]  p_event   The event that has happened.
- */
-typedef void (*im_evt_handler_t)(im_evt_t const * p_event);
-
-
-/**@brief Function for initializing the Identity manager.
- *
- * @retval NRF_SUCCESS          If initialization was successful.
- * @retval NRF_ERROR_INTERNAL   If an error occurred.
- */
-ret_code_t im_init(void);
-
-
 /**@brief Function for dispatching SoftDevice events to the ID Manager module.
  *
  * @param[in]  p_ble_evt  The SoftDevice event.
  */
-void im_ble_evt_handler(ble_evt_t * p_ble_evt);
+void im_ble_evt_handler(ble_evt_t const * p_ble_evt);
 
 
 /**@brief Function for getting the corresponding peer ID from a connection handle.
@@ -122,7 +84,7 @@ pm_peer_id_t im_peer_id_get_by_conn_handle(uint16_t conn_handle);
  *
  * @return The corresponding peer ID, or @ref PM_PEER_ID_INVALID if none could be resolved.
  */
-pm_peer_id_t im_peer_id_get_by_master_id(ble_gap_master_id_t * p_master_id);
+pm_peer_id_t im_peer_id_get_by_master_id(ble_gap_master_id_t const * p_master_id);
 
 
 /**@brief Function for getting the corresponding connection handle from a peer ID.
@@ -130,7 +92,7 @@ pm_peer_id_t im_peer_id_get_by_master_id(ble_gap_master_id_t * p_master_id);
  * @param[in] peer_id  The peer ID.
  *
  * @return The corresponding connection handle, or @ref BLE_CONN_HANDLE_INVALID if none could be
- *         resolved.
+ *         resolved. The conn_handle can refer to a recently disconnected connection.
  */
 uint16_t im_conn_handle_get(pm_peer_id_t peer_id);
 
@@ -151,28 +113,45 @@ bool im_master_ids_compare(ble_gap_master_id_t const * p_master_id1,
  *
  * @param[in]  conn_handle  The connection handle.
  * @param[out] p_ble_addr   The BLE address used by the peer when the connection specified by
- *                          conn_handle was established.
+ *                          conn_handle was established. Cannot be NULL.
  *
  * @retval NRF_SUCCESS                   The address was found and copied.
- * @retval NRF_ERROR_INVALID_STATE       Module not initialized.
- * @retval BLE_ERROR_CONN_HANDLE_INVALID conn_handle does not refer to an active connection.
- * @retval NRF_ERROR_NULL                p_ble_addr was NULL.
+ * @retval BLE_ERROR_INVALID_CONN_HANDLE conn_handle does not refer to an active connection.
  */
 ret_code_t im_ble_addr_get(uint16_t conn_handle, ble_gap_addr_t * p_ble_addr);
 
 
-/**@brief Function for checking whether a master ID is valid or invalid
+/**@brief Function for checking if a master ID is valid or invalid
  *
  * @param[in]  p_master_id  The master ID.
  *
  * @retval true   The master id is valid.
- * @retval true   The master id is invalid (i.e. all zeros).
+ * @retval false  The master id is invalid (i.e. all zeros).
  */
 bool im_master_id_is_valid(ble_gap_master_id_t const * p_master_id);
 
 
+/**@brief Function for checking if two pieces of bonding data correspond to the same peer.
+ *
+ * @param[in]  p_bonding_data1  The first piece of bonding data to check.
+ * @param[in]  p_bonding_data2  The second piece of bonding data to check.
+ *
+ * @retval true   The bonding data correspond to the same peer.
+ * @retval false  The bonding data do not correspond to the same peer.
+ */
 bool im_is_duplicate_bonding_data(pm_peer_data_bonding_t const * p_bonding_data1,
                                   pm_peer_data_bonding_t const * p_bonding_data2);
+
+
+/**@brief Function for finding if we are already bonded to a peer.
+ *
+ * @param[in]  p_bonding_data  The bonding data to check.
+ * @param[in]  peer_id_skip    Optional peer to ignore when searching for duplicates.
+ *
+ * @return  An existing peer ID for the peer, or PM_PEER_ID_INVALID if none was found.
+ */
+pm_peer_id_t im_find_duplicate_bonding_data(pm_peer_data_bonding_t const * p_bonding_data,
+                                            pm_peer_id_t                   peer_id_skip);
 
 
 /**@brief Function for reporting that a new peer ID has been allocated for a specified connection.
@@ -269,7 +248,7 @@ ret_code_t im_privacy_get(pm_privacy_params_t * p_privacy_params);
  * @details This function will use the ECB peripheral to resolve a resolvable address.
  *          This can be used to resolve the identity of a device distributing a random
  *          resolvable address based on any IRKs you have received earlier. If an address is
- *          resolved by an IRK, the device disributing the address must also know the IRK.
+ *          resolved by an IRK, the device distributing the address must also know the IRK.
  *
  * @param[in] p_addr  A random resolvable address.
  * @param[in] p_irk   An identity resolution key (IRK).
@@ -307,7 +286,7 @@ ret_code_t im_whitelist_set(pm_peer_id_t const * p_peers,
  * @param[inout] In: the size of the @p p_irks buffer.
  *               Out: the number of IRKs copied into the buffer.
  *
- * @retval NRF_SUCCESS                      If the whitelist was successfully retreived.
+ * @retval NRF_SUCCESS                      If the whitelist was successfully retrieved.
  * @retval BLE_ERROR_GAP_INVALID_BLE_ADDR   If any peer has an address which can not be used for
  *                                          whitelisting.
  * @retval NRF_ERROR_NOT_FOUND              If the data for any of the cached whitelisted peers

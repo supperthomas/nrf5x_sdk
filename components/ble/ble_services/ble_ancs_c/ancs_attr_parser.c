@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /* Disclaimer: This client implementation of the Apple Notification Center Service can and will be changed at any time by Nordic Semiconductor ASA.
  * Server implementations such as the ones found in iOS can be changed at any time by Apple and may cause this client implementation to stop working.
@@ -57,7 +57,7 @@ static bool all_req_attrs_parsed(ble_ancs_c_t * p_ancs)
 
 static bool attr_is_requested(ble_ancs_c_t * p_ancs, ble_ancs_c_attr_t attr)
 {
-    if(p_ancs->parse_info.p_attr_list[attr.attr_id].get == true)
+    if (p_ancs->parse_info.p_attr_list[attr.attr_id].get == true)
     {
         return true;
     }
@@ -126,7 +126,7 @@ static ble_ancs_c_parse_state_t app_id_parse(ble_ancs_c_t  * p_ancs,
 {
     p_ancs->evt.app_id[p_ancs->parse_info.current_app_id_index] = p_data_src[(*index)++];
 
-    if(p_ancs->evt.app_id[p_ancs->parse_info.current_app_id_index] != '\0')
+    if (p_ancs->evt.app_id[p_ancs->parse_info.current_app_id_index] != '\0')
     {
         p_ancs->parse_info.current_app_id_index++;
         return APP_ID;
@@ -157,14 +157,14 @@ static ble_ancs_c_parse_state_t attr_id_parse(ble_ancs_c_t  * p_ancs,
 
         if (p_ancs->evt.attr.attr_id >= p_ancs->parse_info.nb_of_attr)
         {
-            NRF_LOG_DEBUG("Attribute ID Invalid.\r\n");
+            NRF_LOG_DEBUG("Attribute ID Invalid.");
             return DONE;
         }
         p_ancs->evt.attr.p_attr_data = p_ancs->parse_info.p_attr_list[p_ancs->evt.attr.attr_id].p_attr_data;
 
         if (all_req_attrs_parsed(p_ancs))
         {
-            NRF_LOG_DEBUG("All requested attributes received. \r\n");
+            NRF_LOG_DEBUG("All requested attributes received. ");
             return DONE;
         }
         else
@@ -173,7 +173,7 @@ static ble_ancs_c_parse_state_t attr_id_parse(ble_ancs_c_t  * p_ancs,
             {
                 p_ancs->parse_info.expected_number_of_attrs--;
             }
-            NRF_LOG_DEBUG("Attribute ID %i \r\n", p_ancs->evt.attr.attr_id);
+            NRF_LOG_DEBUG("Attribute ID %i ", p_ancs->evt.attr.attr_id);
             return ATTR_LEN1;
         }
 }
@@ -218,7 +218,7 @@ static ble_ancs_c_parse_state_t attr_len2_parse(ble_ancs_c_t * p_ancs, const uin
     if (p_ancs->evt.attr.attr_len != 0)
     {
         //If the attribute has a length but there is no allocated space for this attribute
-        if((p_ancs->parse_info.p_attr_list[p_ancs->evt.attr.attr_id].attr_len == 0) ||
+        if ((p_ancs->parse_info.p_attr_list[p_ancs->evt.attr.attr_id].attr_len == 0) ||
            (p_ancs->parse_info.p_attr_list[p_ancs->evt.attr.attr_id].p_attr_data == NULL))
         {
             return ATTR_SKIP;
@@ -231,12 +231,12 @@ static ble_ancs_c_parse_state_t attr_len2_parse(ble_ancs_c_t * p_ancs, const uin
     else
     {
 
-        NRF_LOG_DEBUG("Attribute LEN %i \r\n", p_ancs->evt.attr.attr_len);
-        if(attr_is_requested(p_ancs, p_ancs->evt.attr))
+        NRF_LOG_DEBUG("Attribute LEN %i ", p_ancs->evt.attr.attr_len);
+        if (attr_is_requested(p_ancs, p_ancs->evt.attr))
         {
             p_ancs->evt_handler(&p_ancs->evt);
         }
-        if(all_req_attrs_parsed(p_ancs))
+        if (all_req_attrs_parsed(p_ancs))
         {
             return DONE;
         }
@@ -268,7 +268,7 @@ static ble_ancs_c_parse_state_t attr_data_parse(ble_ancs_c_t  * p_ancs,
     if (   (p_ancs->parse_info.current_attr_index < p_ancs->parse_info.p_attr_list[p_ancs->evt.attr.attr_id].attr_len)
         && (p_ancs->parse_info.current_attr_index < p_ancs->evt.attr.attr_len))
     {
-        //NRF_LOG_DEBUG("Byte copied to buffer: %c\r\n", p_data_src[(*index)]); // Un-comment this line to see every byte of an attribute as it is parsed. Commented out by default since it can overflow the uart buffer.
+        //NRF_LOG_DEBUG("Byte copied to buffer: %c", p_data_src[(*index)]); // Un-comment this line to see every byte of an attribute as it is parsed. Commented out by default since it can overflow the uart buffer.
         p_ancs->evt.attr.p_attr_data[p_ancs->parse_info.current_attr_index++] = p_data_src[(*index)++];
     }
 
@@ -288,12 +288,12 @@ static ble_ancs_c_parse_state_t attr_data_parse(ble_ancs_c_t  * p_ancs,
         {
             return ATTR_SKIP;
         }
-        NRF_LOG_DEBUG("Attribute finished!\r\n");
-        if(attr_is_requested(p_ancs, p_ancs->evt.attr))
+        NRF_LOG_DEBUG("Attribute finished!");
+        if (attr_is_requested(p_ancs, p_ancs->evt.attr))
         {
             p_ancs->evt_handler(&p_ancs->evt);
         }
-        if(all_req_attrs_parsed(p_ancs))
+        if (all_req_attrs_parsed(p_ancs))
         {
             return DONE;
         }
@@ -319,11 +319,11 @@ static ble_ancs_c_parse_state_t attr_skip(ble_ancs_c_t * p_ancs, const uint8_t *
     // continue parsing the next attribute ID if we are not done with all the attributes.
     if (p_ancs->parse_info.current_attr_index == p_ancs->evt.attr.attr_len)
     {
-        if(attr_is_requested(p_ancs, p_ancs->evt.attr))
+        if (attr_is_requested(p_ancs, p_ancs->evt.attr))
         {
             p_ancs->evt_handler(&p_ancs->evt);
         }
-        if(all_req_attrs_parsed(p_ancs))
+        if (all_req_attrs_parsed(p_ancs))
         {
             return DONE;
         }
@@ -379,7 +379,7 @@ void ancs_parse_get_attrs_response(ble_ancs_c_t  * p_ancs,
                 break;
 
             case DONE:
-                NRF_LOG_DEBUG("Parse state: Done \r\n");
+                NRF_LOG_DEBUG("Parse state: Done ");
                 index = hvx_data_len;
                 break;
 

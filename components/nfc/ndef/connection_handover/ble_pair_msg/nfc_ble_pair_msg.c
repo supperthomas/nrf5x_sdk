@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,8 +35,11 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
+#include "sdk_common.h"
+#if NRF_MODULE_ENABLED(NFC_BLE_PAIR_MSG)
+
 #include "nfc_ble_pair_msg.h"
 #include "nfc_hs_rec.h"
 #include "nfc_ac_rec.h"
@@ -93,191 +96,6 @@ __STATIC_INLINE void nfc_tk_group_modifier_config(uint8_t ** pp_tk_group, uint8_
     m_tk_group.tk_max_num  = max_group_size;
 }
 
-/** @brief Function for generating a description of a simplified LE OOB message according to the BLE
- *         AD structure.
- *
- * This function declares and initializes a static instance of a simplified LE OOB message
- * with Bluetooth Carrier Configuration LE record. Payload of this record can be configured
- * via AD structure.
- *
- * @param[in]   p_le_advdata          Pointer to the AD for LE OOB record.
- * @param[out]  pp_le_oob_msg_desc    Pointer to pointer to the NDEF message instance.
- *
- * @retval      NRF_SUCCESS           If the function completed successfully.
- * @retval      NRF_ERROR_xxx         If an error occurred.
- */
-static ret_code_t nfc_ble_simplified_le_oob_msg_declare(ble_advdata_t  const * const p_le_advdata,
-                                                        nfc_ndef_msg_desc_t **       pp_le_oob_msg_desc)
-{
-    ret_code_t               err_code;
-    nfc_ndef_record_desc_t * p_nfc_le_oob_record;
-
-    /* Create NFC NDEF message description, capacity - 1 record */
-    NFC_NDEF_MSG_DEF(nfc_le_oob_msg, 1);
-
-    /* The message description is static, therefore */
-    /* you must clear the message (needed for supporting multiple calls) */
-    nfc_ndef_msg_clear(&NFC_NDEF_MSG(nfc_le_oob_msg));
-
-    if (p_le_advdata != NULL)
-    {
-        /* Create NFC NDEF LE OOB Record description without record ID field */
-        p_nfc_le_oob_record = nfc_le_oob_rec_declare(0 , p_le_advdata);
-
-        /* Add LE OOB Record as lone record to message */
-        err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_le_oob_msg), p_nfc_le_oob_record);
-
-        if (err_code != NRF_SUCCESS)
-        {
-            return err_code;
-        }
-    }
-    else
-    {
-        return NRF_ERROR_INVALID_PARAM;
-    }
-
-    *pp_le_oob_msg_desc = &NFC_NDEF_MSG(nfc_le_oob_msg);
-
-    return NRF_SUCCESS;
-}
-
-/** @brief Function for generating a description of a simplified EP OOB message according to the BLE
- *         AD structure.
- *
- * This function declares and initializes a static instance of a simplified EP OOB message
- * with Bluetooth Carrier Configuration EP record. Payload of this record can be configured
- * via AD structure.
- *
- * @param[in]   p_ep_advdata          Pointer to the AD structure for EP OOB record.
- * @param[out]  pp_ep_oob_msg_desc    Pointer to pointer to the NDEF message instance.
- *
- * @retval      NRF_SUCCESS           If the function completed successfully.
- * @retval      NRF_ERROR_xxx         If an error occurred.
- */
-static ret_code_t nfc_ble_simplified_ep_oob_msg_declare(ble_advdata_t  const * const p_ep_advdata,
-                                                        nfc_ndef_msg_desc_t **       pp_ep_oob_msg_desc)
-{
-    ret_code_t               err_code;
-    nfc_ndef_record_desc_t * p_nfc_ep_oob_record;
-
-    /* Create NFC NDEF message description, capacity - 1 record */
-    NFC_NDEF_MSG_DEF(nfc_ep_oob_msg, 1);
-
-    /* The message description is static, therefore */
-    /* you must clear the message (needed for supporting multiple calls) */
-    nfc_ndef_msg_clear(&NFC_NDEF_MSG(nfc_ep_oob_msg));
-
-    if (p_ep_advdata != NULL)
-    {
-        /* Create NFC NDEF EP OOB Record description without record ID field */
-        p_nfc_ep_oob_record = nfc_ep_oob_rec_declare(0 , p_ep_advdata);
-
-        /* Add EP OOB Record as lone record to message */
-        err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_ep_oob_msg), p_nfc_ep_oob_record);
-
-        if (err_code != NRF_SUCCESS)
-        {
-            return err_code;
-        }
-    }
-    else
-    {
-        return NRF_ERROR_INVALID_PARAM;
-    }
-
-    *pp_ep_oob_msg_desc = &NFC_NDEF_MSG(nfc_ep_oob_msg);
-
-    return NRF_SUCCESS;
-}
-
-/** @brief Function for generating a description of a Handover Select NDEF message according to
- *         the BLE AD structures.
- *
- * This function declares and initializes a static instance of an NFC NDEF message description
- * of a Handover Select NDEF message with a Hs record and two OOB records (LE and EP with
- * modifications for Windows). Payload of these records can be configured via AD structures.
- *
- * @warning The order of LE and EP records cannot be changed. Android devices are able to pair
- *          correctly only when the LE record appears before the EP record.
- *
- * @param[in]   p_le_advdata       Pointer to the AD structure for LE OOB record.
- * @param[in]   p_ep_advdata       Pointer to the AD structure for EP OOB record.
- * @param[out]  pp_bt_oob_full_msg Pointer to a pointer to the NDEF message instance.
- *
- * @retval NRF_SUCCESS     If the function completed successfully.
- * @retval NRF_ERROR_xxx   If an error occurred.
- */
-static ret_code_t nfc_ble_full_handover_select_msg_declare(ble_advdata_t  const * const p_le_advdata,
-                                                           ble_advdata_t  const * const p_ep_advdata,
-                                                           nfc_ndef_msg_desc_t **       pp_bt_oob_full_msg)
-{
-    ret_code_t err_code = NRF_SUCCESS;
-
-    // Carrier reference buffers for ac records.
-    static uint8_t carrier_le_reference = '0';
-    static uint8_t carrier_ep_reference = '1';
-
-    // Create ac records for both message types.
-    NFC_NDEF_AC_RECORD_DESC_DEF(ac_rec_le, NFC_AC_CPS_ACTIVE, 1, &carrier_le_reference, 1);
-    NFC_NDEF_AC_RECORD_DESC_DEF(ac_rec_ep, NFC_AC_CPS_ACTIVE, 1, &carrier_ep_reference, 1);
-
-    // Create a Hs record and assign existing ac records to it.
-    NFC_NDEF_HS_RECORD_DESC_DEF(hs_rec, 1, 3, 2);
-
-    nfc_ndef_record_desc_t * p_nfc_hs_record = &NFC_NDEF_HS_RECORD_DESC(hs_rec);
-
-    // Clear the record before assigning local records to it (in case this function has already been called).
-    nfc_hs_rec_local_record_clear(p_nfc_hs_record);
-
-    err_code = nfc_hs_rec_local_record_add(p_nfc_hs_record, &NFC_NDEF_AC_RECORD_DESC(ac_rec_le));
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
-    err_code = nfc_hs_rec_local_record_add(p_nfc_hs_record, &NFC_NDEF_AC_RECORD_DESC(ac_rec_ep));
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
-    // Create le and ep records.
-    nfc_ndef_record_desc_t * p_nfc_le_oob_record =
-            nfc_le_oob_rec_declare(carrier_le_reference , p_le_advdata);
-
-    nfc_ndef_record_desc_t * p_nfc_ep_oob_record =
-            nfc_ep_oob_rec_declare(carrier_ep_reference , p_ep_advdata);
-
-    // Create full NDEF Handover Select message for Connection Handover and assign Hs, le and ep records to it.
-    NFC_NDEF_MSG_DEF(hs_full_msg, 3);
-
-    // Clear the message before assigning records to it (in case this function has already been called).
-    nfc_ndef_msg_clear(&NFC_NDEF_MSG(hs_full_msg));
-
-    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(hs_full_msg), p_nfc_hs_record);
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
-    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(hs_full_msg), p_nfc_le_oob_record);
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
-    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(hs_full_msg), p_nfc_ep_oob_record);
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
-    *pp_bt_oob_full_msg = &NFC_NDEF_MSG(hs_full_msg);
-
-    return err_code;
-}
-
 /** @brief Function for creating an AD structure with common configuration for EP and LE OOB records.
  *
  * This function creates an AD structure and initializes its fields with default content. Only
@@ -285,8 +103,8 @@ static ret_code_t nfc_ble_full_handover_select_msg_declare(ble_advdata_t  const 
  *
  * @param[in]       p_tk_value          Pointer to the authentication Temporary Key (TK). If NULL,
  *                                      TK field of the returned AD structure is empty.
- * @param[out]      p_adv_data          Pointer to BLE AD structure with common configuration for EP and
- *                                      LE OOB records.
+ * @param[out]      p_adv_data          Pointer to BLE AD structure with common configuration for EP
+ *                                      and LE OOB records.
  */
 static void common_adv_data_create(ble_advdata_tk_value_t  * const p_tk_value,
                                    ble_gap_lesc_oob_data_t * const p_lesc_data,
@@ -354,15 +172,19 @@ ret_code_t nfc_ble_simplified_le_oob_msg_encode(ble_advdata_t const * const p_le
                                                 uint8_t             *       p_buf,
                                                 uint32_t            *       p_len)
 {
-    nfc_ndef_msg_desc_t * p_le_oob_msg_desc;
-    ret_code_t            err_code;
+    ret_code_t err_code;
 
-    err_code = nfc_ble_simplified_le_oob_msg_declare(p_le_advdata, &p_le_oob_msg_desc);
+    /* Create NFC NDEF message description, capacity - 1 record */
+    NFC_NDEF_MSG_DEF(nfc_le_oob_msg, 1);
 
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
+    /* Create NFC NDEF LE OOB Record description without record ID field */
+    NFC_NDEF_LE_OOB_RECORD_DESC_DEF(nfc_le_oob_rec, 0, p_le_advdata);
+
+    /* Add LE OOB Record as lone record to message */
+    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_le_oob_msg),
+                                       &NFC_NDEF_LE_OOB_RECORD_DESC(nfc_le_oob_rec));
+    VERIFY_SUCCESS(err_code);
+    VERIFY_PARAM_NOT_NULL(p_le_advdata);
 
     if (!m_tk_modifier_on)
     {
@@ -370,7 +192,7 @@ ret_code_t nfc_ble_simplified_le_oob_msg_encode(ble_advdata_t const * const p_le
     }
 
     /* Encode whole message into buffer */
-    err_code = nfc_ndef_msg_encode(p_le_oob_msg_desc,
+    err_code = nfc_ndef_msg_encode(&NFC_NDEF_MSG(nfc_le_oob_msg),
                                    p_buf,
                                    p_len);
 
@@ -381,15 +203,19 @@ ret_code_t nfc_ble_simplified_ep_oob_msg_encode(ble_advdata_t const * const p_ep
                                                 uint8_t             *       p_buf,
                                                 uint32_t            *       p_len)
 {
-    nfc_ndef_msg_desc_t * p_ep_oob_msg_desc;
-    ret_code_t            err_code;
+    ret_code_t err_code;
 
-    err_code = nfc_ble_simplified_ep_oob_msg_declare(p_ep_advdata, &p_ep_oob_msg_desc);
+    /* Create NFC NDEF message description, capacity - 1 record */
+    NFC_NDEF_MSG_DEF(nfc_ep_oob_msg, 1);
 
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
+    /* Create NFC NDEF EP OOB Record description without record ID field */
+    NFC_NDEF_EP_OOB_RECORD_DESC_DEF(nfc_ep_oob_rec, 0, p_ep_advdata);
+
+    /* Add EP OOB Record as lone record to message */
+    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_ep_oob_msg),
+                                       &NFC_NDEF_EP_OOB_RECORD_DESC(nfc_ep_oob_rec));
+    VERIFY_SUCCESS(err_code);
+    VERIFY_PARAM_NOT_NULL(p_ep_advdata);
 
     if (!m_tk_modifier_on)
     {
@@ -397,7 +223,7 @@ ret_code_t nfc_ble_simplified_ep_oob_msg_encode(ble_advdata_t const * const p_ep
     }
 
     /* Encode whole message into buffer */
-    err_code = nfc_ndef_msg_encode(p_ep_oob_msg_desc,
+    err_code = nfc_ndef_msg_encode(&NFC_NDEF_MSG(nfc_ep_oob_msg),
                                    p_buf,
                                    p_len);
 
@@ -409,17 +235,44 @@ ret_code_t nfc_ble_full_handover_select_msg_encode(ble_advdata_t const * const p
                                                    uint8_t             *       p_buf,
                                                    uint32_t            *       p_len)
 {
-    nfc_ndef_msg_desc_t * p_full_hs_msg_desc;
-    ret_code_t            err_code;
+    ret_code_t err_code;
 
-    err_code = nfc_ble_full_handover_select_msg_declare(p_le_advdata,
-                                                        p_ep_advdata,
-                                                        &p_full_hs_msg_desc);
+    // Carrier reference buffers for ac records.
+    uint8_t carrier_le_reference = '0';
+    uint8_t carrier_ep_reference = '1';
 
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
+    // Create ac records for both message types.
+    NFC_NDEF_AC_RECORD_DESC_DEF(ac_rec_le, NFC_AC_CPS_ACTIVE, 1, &carrier_le_reference, 1);
+    NFC_NDEF_AC_RECORD_DESC_DEF(ac_rec_ep, NFC_AC_CPS_ACTIVE, 1, &carrier_ep_reference, 1);
+
+    // Create a Hs record and assign existing ac records to it.
+    NFC_NDEF_HS_RECORD_DESC_DEF(hs_rec, 1, 3, 2);
+    err_code = nfc_hs_rec_local_record_add(&NFC_NDEF_HS_RECORD_DESC(hs_rec),
+                                           &NFC_NDEF_AC_RECORD_DESC(ac_rec_le));
+    VERIFY_SUCCESS(err_code);
+    err_code = nfc_hs_rec_local_record_add(&NFC_NDEF_HS_RECORD_DESC(hs_rec),
+                                           &NFC_NDEF_AC_RECORD_DESC(ac_rec_ep));
+    VERIFY_SUCCESS(err_code);
+
+    // Create LE and EP records with different record IDs.
+    NFC_NDEF_LE_OOB_RECORD_DESC_DEF(nfc_le_oob_rec, carrier_le_reference, p_le_advdata);
+    NFC_NDEF_EP_OOB_RECORD_DESC_DEF(nfc_ep_oob_rec, carrier_ep_reference, p_ep_advdata);
+
+    // Create full NDEF Handover Select message for Connection Handover and assign Hs,
+    // LE and EP records to it.
+    NFC_NDEF_MSG_DEF(nfc_hs_full_msg, 3);
+    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_hs_full_msg),
+                                       &NFC_NDEF_HS_RECORD_DESC(hs_rec));
+    VERIFY_SUCCESS(err_code);
+    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_hs_full_msg),
+                                       &NFC_NDEF_LE_OOB_RECORD_DESC(nfc_le_oob_rec));
+    VERIFY_SUCCESS(err_code);
+    err_code = nfc_ndef_msg_record_add(&NFC_NDEF_MSG(nfc_hs_full_msg),
+                                       &NFC_NDEF_EP_OOB_RECORD_DESC(nfc_ep_oob_rec));
+    VERIFY_SUCCESS(err_code);
+
+    VERIFY_PARAM_NOT_NULL(p_le_advdata);
+    VERIFY_PARAM_NOT_NULL(p_ep_advdata);
 
     if (!m_tk_modifier_on)
     {
@@ -427,7 +280,7 @@ ret_code_t nfc_ble_full_handover_select_msg_encode(ble_advdata_t const * const p
     }
 
     /* Encode whole message into buffer */
-    err_code = nfc_ndef_msg_encode(p_full_hs_msg_desc,
+    err_code = nfc_ndef_msg_encode(&NFC_NDEF_MSG(nfc_hs_full_msg),
                                    p_buf,
                                    p_len);
 
@@ -522,7 +375,7 @@ ret_code_t nfc_tk_to_group_add(uint8_t * p_tk_location)
 
 ret_code_t nfc_lesc_pos_set(uint8_t * p_confirm, uint8_t * p_random)
 {
-    if((p_confirm != NULL) && (p_random != NULL))
+    if ((p_confirm != NULL) && (p_random != NULL))
     {
         m_lesc_pos.confirm = p_confirm;
         m_lesc_pos.random = p_random;
@@ -535,14 +388,14 @@ ret_code_t nfc_lesc_pos_set(uint8_t * p_confirm, uint8_t * p_random)
     }
 }
 
-ret_code_t nfc_lesc_data_update(ble_gap_lesc_oob_data_t * ble_lesc_oob_data)
+ret_code_t nfc_lesc_data_update(ble_gap_lesc_oob_data_t * p_ble_lesc_oob_data)
 {
-    if(ble_lesc_oob_data != NULL)
+    if (p_ble_lesc_oob_data != NULL)
     {
-        if((ble_lesc_oob_data->c != NULL) && (ble_lesc_oob_data->r != NULL))
+        if ((m_lesc_pos.confirm != NULL) && (m_lesc_pos.random != NULL))
         {
-            memcpy(m_lesc_pos.confirm, ble_lesc_oob_data->c, AD_TYPE_CONFIRM_VALUE_DATA_SIZE);
-            memcpy(m_lesc_pos.random, ble_lesc_oob_data->r, AD_TYPE_RANDOM_VALUE_DATA_SIZE);
+            memcpy(m_lesc_pos.confirm, p_ble_lesc_oob_data->c, AD_TYPE_CONFIRM_VALUE_DATA_SIZE);
+            memcpy(m_lesc_pos.random, p_ble_lesc_oob_data->r, AD_TYPE_RANDOM_VALUE_DATA_SIZE);
 
             return NRF_SUCCESS;
         }
@@ -554,3 +407,5 @@ ret_code_t nfc_lesc_data_update(ble_gap_lesc_oob_data_t * ble_lesc_oob_data)
         return NRF_ERROR_NULL;
     }
 }
+
+#endif // NRF_MODULE_ENABLED(NFC_BLE_PAIR_MSG)

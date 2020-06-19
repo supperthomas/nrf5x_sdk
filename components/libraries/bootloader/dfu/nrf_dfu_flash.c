@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,279 +35,133 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
+
 #include "nrf_dfu_flash.h"
 #include "nrf_dfu_types.h"
-#include "nrf_nvmc.h"
+
+#include "nrf_fstorage.h"
+#include "nrf_fstorage_sd.h"
+#include "nrf_fstorage_nvmc.h"
+
+
+#define NRF_LOG_MODULE_NAME nrf_dfu_flash
 #include "nrf_log.h"
-
-#define FLASH_FLAG_NONE                 (0)
-#define FLASH_FLAG_OPER                 (1<<0)
-#define FLASH_FLAG_FAILURE_SINCE_LAST   (1<<1)
-#define FLASH_FLAG_SD_ENABLED           (1<<2)
-
-static uint32_t m_flags;  /*lint -e551*/
+NRF_LOG_MODULE_REGISTER();
 
 
-#ifdef BLE_STACK_SUPPORT_REQD
-#include "softdevice_handler.h"
-#include "fstorage.h"
+void dfu_fstorage_evt_handler(nrf_fstorage_evt_t * p_evt);
 
-// Function prototypes
-static void fs_evt_handler(fs_evt_t const * const evt, fs_ret_t result);
 
-FS_REGISTER_CFG(fs_config_t fs_dfu_config) =
+NRF_FSTORAGE_DEF(nrf_fstorage_t m_fs) =
 {
-    .callback       = fs_evt_handler,            // Function for event callbacks.
-    .p_start_addr   = (uint32_t*)MBR_SIZE,
-    .p_end_addr     = (uint32_t*)BOOTLOADER_SETTINGS_ADDRESS + CODE_PAGE_SIZE
+    .evt_handler = dfu_fstorage_evt_handler,
+    .start_addr  = MBR_SIZE,
+    .end_addr    = BOOTLOADER_SETTINGS_ADDRESS + BOOTLOADER_SETTINGS_PAGE_SIZE
 };
 
+static uint32_t m_flash_operations_pending;
 
-static void fs_evt_handler(fs_evt_t const * const evt, fs_ret_t result)
+void dfu_fstorage_evt_handler(nrf_fstorage_evt_t * p_evt)
 {
-    // Clear the operation flag
-    m_flags &= ~FLASH_FLAG_OPER;
-
-    if (result == FS_SUCCESS)
+    if (NRF_LOG_ENABLED && (m_flash_operations_pending > 0))
     {
-        // Clear flag for ongoing operation and failure since last
-        m_flags &= ~FLASH_FLAG_FAILURE_SINCE_LAST;
+        m_flash_operations_pending--;
+    }
+
+    if (p_evt->result == NRF_SUCCESS)
+    {
+        NRF_LOG_DEBUG("Flash %s success: addr=%p, pending %d",
+                      (p_evt->id == NRF_FSTORAGE_EVT_WRITE_RESULT) ? "write" : "erase",
+                      p_evt->addr, m_flash_operations_pending);
     }
     else
     {
-        NRF_LOG_ERROR("Generating failure\r\n");
-        m_flags |= FLASH_FLAG_FAILURE_SINCE_LAST;
+        NRF_LOG_DEBUG("Flash %s failed (0x%x): addr=%p, len=0x%x bytes, pending %d",
+                      (p_evt->id == NRF_FSTORAGE_EVT_WRITE_RESULT) ? "write" : "erase",
+                      p_evt->result, p_evt->addr, p_evt->len, m_flash_operations_pending);
     }
 
-    if (evt->p_context)
+    if (p_evt->p_param)
     {
-        //lint -e611
-        ((dfu_flash_callback_t)evt->p_context)(evt, result);
+        //lint -save -e611 (Suspicious cast)
+        ((nrf_dfu_flash_callback_t)(p_evt->p_param))((void*)p_evt->p_src);
+        //lint -restore
     }
 }
 
-#endif
 
-
-uint32_t nrf_dfu_flash_init(bool sd_enabled)
+ret_code_t nrf_dfu_flash_init(bool sd_irq_initialized)
 {
-    uint32_t err_code = NRF_SUCCESS;
+    nrf_fstorage_api_t * p_api_impl;
 
-#ifdef BLE_STACK_SUPPORT_REQD
-    // Only run this initialization if SD is enabled
-    if(sd_enabled)
+    /* Setup the desired API implementation. */
+#if defined(BLE_STACK_SUPPORT_REQD) || defined(ANT_STACK_SUPPORT_REQD)
+    if (sd_irq_initialized)
     {
-        NRF_LOG_DEBUG("------- nrf_dfu_flash_init-------\r\n");
-        if (fs_fake_init() != FS_SUCCESS)
-        {
-            NRF_LOG_ERROR("Not initializing the thing\r\n");
-            return NRF_ERROR_INVALID_STATE;
-        }
-
-        // Enable access to the whole range
-
-
-        err_code = softdevice_sys_evt_handler_set(fs_sys_event_handler);
-        if (err_code != NRF_SUCCESS)
-        {
-            NRF_LOG_ERROR("Not initializing the thing 2\r\n");
-            return NRF_ERROR_INVALID_STATE;
-        }
-
-        // Setting flag to indicate that SD is enabled to ensure fstorage is use in calls
-        // to do flash operations.
-        m_flags = FLASH_FLAG_SD_ENABLED;
+        NRF_LOG_DEBUG("Initializing nrf_fstorage_sd backend.");
+        p_api_impl = &nrf_fstorage_sd;
     }
     else
 #endif
     {
-        m_flags = FLASH_FLAG_NONE;
+        NRF_LOG_DEBUG("Initializing nrf_fstorage_nvmc backend.");
+        p_api_impl = &nrf_fstorage_nvmc;
     }
 
-    return err_code;
+    return nrf_fstorage_init(&m_fs, p_api_impl, NULL);
 }
 
 
-fs_ret_t nrf_dfu_flash_store(uint32_t const * p_dest, uint32_t const * const p_src, uint32_t len_words, dfu_flash_callback_t callback)
+ret_code_t nrf_dfu_flash_store(uint32_t                   dest,
+                               void               const * p_src,
+                               uint32_t                   len,
+                               nrf_dfu_flash_callback_t   callback)
 {
-    fs_ret_t ret_val = FS_SUCCESS;
+    ret_code_t rc;
 
-#ifdef BLE_STACK_SUPPORT_REQD
-    if ((m_flags & FLASH_FLAG_SD_ENABLED) != 0)
+    NRF_LOG_DEBUG("nrf_fstorage_write(addr=%p, src=%p, len=%d bytes), queue usage: %d",
+                  dest, p_src, len, m_flash_operations_pending);
+
+    //lint -save -e611 (Suspicious cast)
+    rc = nrf_fstorage_write(&m_fs, dest, p_src, len, (void *)callback);
+    //lint -restore
+
+    if ((NRF_LOG_ENABLED) && (rc == NRF_SUCCESS))
     {
-        // Check if there is a pending error
-        if ((m_flags & FLASH_FLAG_FAILURE_SINCE_LAST) != 0)
-        {
-            NRF_LOG_ERROR("Flash: Failure since last\r\n");
-            return FS_ERR_FAILURE_SINCE_LAST;
-        }
-
-        // Set the flag to indicate ongoing operation
-        m_flags |= FLASH_FLAG_OPER;
-        //lint -e611
-        ret_val = fs_store(&fs_dfu_config, p_dest, p_src, len_words, (void*)callback);
-
-        if (ret_val != FS_SUCCESS)
-        {
-            NRF_LOG_ERROR("Flash: failed %d\r\n", ret_val);
-            return ret_val;
-        }
-
-        // Set the flag to indicate ongoing operation
-        m_flags |= FLASH_FLAG_OPER;
+        m_flash_operations_pending++;
     }
     else
-#endif
     {
-
-#ifndef NRF51
-        if ((p_src == NULL) || (p_dest == NULL))
-        {
-            return FS_ERR_NULL_ARG;
-        }
-
-        // Check that both pointers are word aligned.
-        if (((uint32_t)p_src  & 0x03) ||
-            ((uint32_t)p_dest & 0x03))
-        {
-            return FS_ERR_UNALIGNED_ADDR;
-        }
-
-        if (len_words == 0)
-        {
-            NRF_LOG_ERROR("Flash: Invalid length (NVMC)\r\n");
-            return FS_ERR_INVALID_ARG;
-        }
-#endif
-
-        nrf_nvmc_write_words((uint32_t)p_dest, p_src, len_words);
-
-        #if (__LINT__ != 1)
-        if (callback)
-        {
-            fs_evt_t evt =
-            {
-                .id = FS_EVT_STORE,
-                .p_context = (void*)callback,
-                .store =
-                {
-                    .length_words = len_words,
-                    .p_data = p_dest
-                }
-            };
-            callback(&evt, FS_SUCCESS);
-        }
-        #endif
+        NRF_LOG_WARNING("nrf_fstorage_write() failed with error 0x%x.", rc);
     }
 
-    return ret_val;
+    return rc;
 }
 
 
-/** @brief Internal function to initialize DFU BLE transport
- */
-fs_ret_t nrf_dfu_flash_erase(uint32_t const * p_dest, uint32_t num_pages, dfu_flash_callback_t callback)
+ret_code_t nrf_dfu_flash_erase(uint32_t                 page_addr,
+                               uint32_t                 num_pages,
+                               nrf_dfu_flash_callback_t callback)
 {
-    fs_ret_t ret_val = FS_SUCCESS;
-    NRF_LOG_DEBUG("Erasing: 0x%08x, num: %d\r\n", (uint32_t)p_dest, num_pages);
+    ret_code_t rc;
 
-#ifdef BLE_STACK_SUPPORT_REQD
+    NRF_LOG_DEBUG("nrf_fstorage_erase(addr=0x%p, len=%d pages), queue usage: %d",
+                  page_addr, num_pages, m_flash_operations_pending);
 
-    if ((m_flags & FLASH_FLAG_SD_ENABLED) != 0)
+    //lint -save -e611 (Suspicious cast)
+    rc = nrf_fstorage_erase(&m_fs, page_addr, num_pages, (void *)callback);
+    //lint -restore
+
+    if ((NRF_LOG_ENABLED) && (rc == NRF_SUCCESS))
     {
-        // Check if there is a pending error
-        if ((m_flags & FLASH_FLAG_FAILURE_SINCE_LAST) != 0)
-        {
-            NRF_LOG_ERROR("Erase: Failure since last\r\n");
-            return FS_ERR_FAILURE_SINCE_LAST;
-        }
-
-        m_flags |= FLASH_FLAG_OPER;
-        ret_val = fs_erase(&fs_dfu_config, p_dest, num_pages, (void*)callback);
-
-        if (ret_val != FS_SUCCESS)
-        {
-            NRF_LOG_ERROR("Erase failed: %d\r\n", ret_val);
-            m_flags &= ~FLASH_FLAG_OPER;
-            return ret_val;
-        }
-
-        // Set the flag to indicate ongoing operation
-        m_flags |= FLASH_FLAG_OPER;
+        m_flash_operations_pending++;
     }
     else
-#endif
     {
-#ifndef NRF51
-        // Softdevice is not present or activated. Run the NVMC instead
-        if (((uint32_t)p_dest & (CODE_PAGE_SIZE-1)) != 0)
-        {
-            NRF_LOG_ERROR("Invalid address\r\n");
-            return FS_ERR_UNALIGNED_ADDR;
-        }
-#endif
-
-        uint16_t first_page = ((uint32_t)p_dest / CODE_PAGE_SIZE);
-        do
-        {
-            nrf_nvmc_page_erase((uint32_t)p_dest);
-            p_dest += CODE_PAGE_SIZE/sizeof(uint32_t);
-        }
-        while(--num_pages > 0);
-
-
-        if (callback)
-        {
-            #if (__LINT__ != 1)
-            fs_evt_t evt =
-            {
-                .id = FS_EVT_ERASE,
-                .p_context = (void*)callback,
-                .erase =
-                {
-                    .first_page = first_page,
-                    .last_page = ((uint32_t)p_dest / CODE_PAGE_SIZE)
-                }
-            };
-            callback(&evt, FS_SUCCESS);
-            #else
-            (void)first_page;
-            #endif
-        }
+        NRF_LOG_WARNING("nrf_fstorage_erase() failed with error 0x%x.", rc);
     }
 
-    return ret_val;
-}
-
-
-void nrf_dfu_flash_error_clear(void)
-{
-    m_flags &= ~FLASH_FLAG_FAILURE_SINCE_LAST;
-}
-
-
-fs_ret_t nrf_dfu_flash_wait(void)
-{
-    NRF_LOG_DEBUG("Waiting for finished...\r\n");
-
-#ifdef BLE_STACK_SUPPORT_REQD
-    if ((m_flags & FLASH_FLAG_SD_ENABLED) != 0)
-    {
-        while ((m_flags & FLASH_FLAG_OPER) != 0)
-        {
-            (void)sd_app_evt_wait();
-        }
-
-        if ((m_flags & FLASH_FLAG_FAILURE_SINCE_LAST) != 0)
-        {
-            NRF_LOG_ERROR("Failure since last\r\n");
-            return FS_ERR_FAILURE_SINCE_LAST;
-        }
-    }
-#endif
-
-    NRF_LOG_DEBUG("After wait!\r\n");
-    return FS_SUCCESS;
+    return rc;
 }

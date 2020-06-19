@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,15 +35,16 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble_ln_cp.h"
 #include "ble_ln_db.h"
 #include "ble_ln_common.h"
 #include "sdk_common.h"
 
-#define NRF_LOG_MODULE_NAME "BLE_LN_CP"
+#define NRF_LOG_MODULE_NAME ble_ln_cp
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 // Feature Mask bits
 #define FEATURE_MASK_INSTANTANEOUS_SPEED                 (0x01 << 0)         /**< Instantaneous Speed mask bit. */
@@ -63,6 +64,26 @@
 #define OPCODE_LENGTH                                   1  /**< Length of opcode inside Location and Navigation Measurement packet. */
 #define HANDLE_LENGTH                                   2  /**< Length of handle inside Location and Navigation Measurement packet. */
 
+
+/**@brief Function for interception of GATT errors and @ref nrf_ble_gq errors.
+ *
+ * @param[in] nrf_error   Error code.
+ * @param[in] p_ctx       Parameter from the event handler.
+ * @param[in] conn_handle Connection handle.
+ */
+static void gatt_error_handler(uint32_t   nrf_error,
+                               void     * p_ctx,
+                               uint16_t   conn_handle)
+{
+    ble_lncp_t * p_lncp = (ble_lncp_t *)p_ctx;
+
+    if (p_lncp->error_handler != NULL)
+    {
+        p_lncp->error_handler(nrf_error);
+    }
+}
+
+
 static ble_lncp_rsp_code_t notify_app(ble_lncp_t const * p_lncp, ble_lncp_evt_t const * p_evt)
 {
     ble_lncp_rsp_code_t rsp = LNCP_RSP_SUCCESS;
@@ -81,10 +102,10 @@ static void resp_send(ble_lncp_t * p_lncp)
     // Send indication
     uint16_t               hvx_len;
     uint8_t                hvx_data[MAX_CTRL_POINT_RESP_PARAM_LEN];
-    ble_gatts_hvx_params_t hvx_params;
     uint32_t               err_code;
+    nrf_ble_gq_req_t       lncp_req;
 
-    memset(&hvx_params, 0, sizeof(hvx_params));
+    memset(&lncp_req, 0, sizeof(nrf_ble_gq_req_t));
 
     hvx_len = 3 + p_lncp->pending_rsp.rsp_param_len;
     hvx_data[0] = LNCP_OP_RESPONSE_CODE;
@@ -93,40 +114,23 @@ static void resp_send(ble_lncp_t * p_lncp)
 
     memcpy(&hvx_data[3], &p_lncp->pending_rsp.rsp_param[0], p_lncp->pending_rsp.rsp_param_len);
 
-    hvx_params.handle   = p_lncp->ctrlpt_handles.value_handle;
-    hvx_params.type     = BLE_GATT_HVX_INDICATION;
-    hvx_params.offset   = 0;
-    hvx_params.p_len    = &hvx_len;
-    hvx_params.p_data   = hvx_data;
+    lncp_req.type                               = NRF_BLE_GQ_REQ_GATTS_HVX;
+    lncp_req.error_handler.cb                   = gatt_error_handler;
+    lncp_req.error_handler.p_ctx                = p_lncp;
+    lncp_req.params.gatts_hvx.handle  = p_lncp->ctrlpt_handles.value_handle;
+    lncp_req.params.gatts_hvx.offset  = 0;
+    lncp_req.params.gatts_hvx.p_data  = hvx_data;
+    lncp_req.params.gatts_hvx.p_len   = &hvx_len;
+    lncp_req.params.gatts_hvx.type    = BLE_GATT_HVX_INDICATION;
 
-    err_code = sd_ble_gatts_hvx(p_lncp->conn_handle, &hvx_params);
+    p_lncp->is_indication_pending = true;
 
-    // Error handling
-    if ((err_code == NRF_SUCCESS) && (hvx_len != p_lncp->pending_rsp.rsp_param_len + 3))
+    err_code = nrf_ble_gq_item_add(p_lncp->p_gatt_queue, &lncp_req, p_lncp->conn_handle);
+
+    if ((p_lncp->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS))
     {
-        err_code = NRF_ERROR_DATA_SIZE;
-    }
-
-    switch (err_code)
-    {
-        case NRF_SUCCESS:
-            p_lncp->procedure_status = LNCP_STATE_CONFIRMATION_PENDING;
-            // Wait for HVC event
-            break;
-
-        case NRF_ERROR_RESOURCES:
-            // Wait for TX_COMPLETE event to retry transmission
-            p_lncp->procedure_status = LNCP_STATE_INDICATION_PENDING;
-            break;
-
-        default:
-            p_lncp->procedure_status = LNCP_STATE_INDICATION_PENDING;
-            // error
-            if (p_lncp->error_handler != NULL)
-            {
-                p_lncp->error_handler(err_code);
-            }
-            break;
+        p_lncp->error_handler(err_code);
     }
 }
 
@@ -135,7 +139,6 @@ static void on_connect(ble_lncp_t * p_lncp, ble_evt_t const * p_ble_evt)
 {
     memset(&p_lncp->mask, 0, sizeof(ble_lncp_mask_t));
     p_lncp->conn_handle        = p_ble_evt->evt.gap_evt.conn_handle;
-    p_lncp->procedure_status   = LNCP_STATE_NO_PROC_IN_PROGRESS;
 }
 
 
@@ -143,7 +146,6 @@ static void on_disconnect(ble_lncp_t * p_lncp, ble_evt_t const * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_lncp->conn_handle        = BLE_CONN_HANDLE_INVALID;
-    p_lncp->procedure_status   = LNCP_STATE_NO_PROC_IN_PROGRESS;
 }
 
 
@@ -151,9 +153,9 @@ static void on_hvc_confirm(ble_lncp_t * p_lncp, ble_evt_t const * p_ble_evt)
 {
     if (p_ble_evt->evt.gatts_evt.params.hvc.handle == p_lncp->ctrlpt_handles.value_handle)
     {
-        if (p_lncp->procedure_status == LNCP_STATE_CONFIRMATION_PENDING)
+        if (p_lncp->is_indication_pending)
         {
-            p_lncp->procedure_status = LNCP_STATE_NO_PROC_IN_PROGRESS;
+            p_lncp->is_indication_pending = false;
         }
         else
         {
@@ -162,15 +164,6 @@ static void on_hvc_confirm(ble_lncp_t * p_lncp, ble_evt_t const * p_ble_evt)
                 p_lncp->error_handler(NRF_ERROR_INVALID_STATE);
             }
         }
-    }
-}
-
-
-static void on_tx_complete(ble_lncp_t * p_lncp)
-{
-    if (p_lncp->procedure_status == LNCP_STATE_INDICATION_PENDING)
-    {
-        resp_send(p_lncp);
     }
 }
 
@@ -526,7 +519,7 @@ static void on_ctrlpt_write(ble_lncp_t * p_lncp, ble_gatts_evt_write_t const * p
 
     if (p_lncp->is_ctrlpt_indication_enabled)
     {
-        if (p_lncp->procedure_status == LNCP_STATE_NO_PROC_IN_PROGRESS)
+        if (!p_lncp->is_indication_pending)
         {
             write_authorize_reply.params.write.update      = 1;
             write_authorize_reply.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
@@ -540,19 +533,19 @@ static void on_ctrlpt_write(ble_lncp_t * p_lncp, ble_gatts_evt_write_t const * p
                 {
                     if (!p_lncp->is_nav_notification_enabled)
                     {
-                        write_authorize_reply.params.write.gatt_status = LNCP_RSP_CCCD_CONFIG_IMPROPER;
+                        write_authorize_reply.params.write.gatt_status = BLE_GATT_STATUS_ATTERR_CPS_CCCD_CONFIG_ERROR;
                     }
                 }
             }
         }
         else
         {
-            write_authorize_reply.params.write.gatt_status = LNCP_RSP_PROC_ALR_IN_PROG;
+            write_authorize_reply.params.write.gatt_status = BLE_GATT_STATUS_ATTERR_CPS_PROC_ALR_IN_PROG;
         }
     }
     else
     {
-        write_authorize_reply.params.write.gatt_status = LNCP_RSP_CCCD_CONFIG_IMPROPER;
+        write_authorize_reply.params.write.gatt_status = BLE_GATT_STATUS_ATTERR_CPS_CCCD_CONFIG_ERROR;
     }
 
     // reply to the write authorization
@@ -574,7 +567,6 @@ static void on_ctrlpt_write(ble_lncp_t * p_lncp, ble_gatts_evt_write_t const * p
     }
 
     // Start executing the control point write action
-    p_lncp->procedure_status = LNCP_STATE_INDICATION_PENDING;
     if (p_evt_write->len > 0)
     {
         p_lncp->pending_rsp.op_code = (ble_lncp_op_code_t) p_evt_write->data[0];
@@ -619,10 +611,6 @@ static void on_ctrlpt_write(ble_lncp_t * p_lncp, ble_gatts_evt_write_t const * p
         }
 
         resp_send(p_lncp);
-    }
-    else
-    {
-        p_lncp->procedure_status = LNCP_STATE_NO_PROC_IN_PROGRESS;
     }
 }
 
@@ -716,9 +704,6 @@ void ble_lncp_on_ble_evt(ble_lncp_t * p_lncp, ble_evt_t const * p_ble_evt)
             }
             break;
 
-        case BLE_GATTS_EVT_HVN_TX_COMPLETE:
-            on_tx_complete(p_lncp);
-            break;
 
         default:
             // no implementation
@@ -776,6 +761,7 @@ ret_code_t ble_lncp_init(ble_lncp_t * p_lncp, ble_lncp_init_t const * p_lncp_ini
 {
     VERIFY_PARAM_NOT_NULL(p_lncp);
     VERIFY_PARAM_NOT_NULL(p_lncp_init);
+    VERIFY_PARAM_NOT_NULL(p_lncp_init->p_gatt_queue);
 
     ble_add_char_params_t add_char_params;
 
@@ -784,6 +770,7 @@ ret_code_t ble_lncp_init(ble_lncp_t * p_lncp, ble_lncp_init_t const * p_lncp_ini
     p_lncp->service_handle               = p_lncp_init->service_handle;
     p_lncp->evt_handler                  = p_lncp_init->evt_handler;
     p_lncp->error_handler                = p_lncp_init->error_handler;
+    p_lncp->p_gatt_queue                 = p_lncp_init->p_gatt_queue;
     p_lncp->available_features           = p_lncp_init->available_features;
     p_lncp->is_position_quality_present  = p_lncp_init->is_position_quality_present;
     p_lncp->is_navigation_present        = p_lncp_init->is_navigation_present;
@@ -794,7 +781,6 @@ ret_code_t ble_lncp_init(ble_lncp_t * p_lncp, ble_lncp_init_t const * p_lncp_ini
     p_lncp->fix_rate                     = BLE_LNS_NO_FIX;
     p_lncp->selected_route               = BLE_LNS_INVALID_ROUTE;
 
-    p_lncp->procedure_status             = LNCP_STATE_NO_PROC_IN_PROGRESS;
     p_lncp->conn_handle                  = BLE_CONN_HANDLE_INVALID;
     p_lncp->is_navigation_running        = false;
     p_lncp->is_nav_notification_enabled  = false;
@@ -812,7 +798,7 @@ ret_code_t ble_lncp_init(ble_lncp_t * p_lncp, ble_lncp_init_t const * p_lncp_ini
     add_char_params.write_access         = p_lncp_init->write_perm;
     add_char_params.cccd_write_access    = p_lncp_init->cccd_write_perm;
 
-    NRF_LOG_DEBUG("Initialized\r\n");
+    NRF_LOG_DEBUG("Initialized");
 
     return characteristic_add(p_lncp->service_handle,
                               &add_char_params,

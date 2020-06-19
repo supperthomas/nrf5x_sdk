@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2011 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2011 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 
 #include "sdk_common.h"
@@ -93,9 +93,15 @@ static nrf_strerror_desc_t const nrf_strerror_array[] =
     NRF_STRERROR_ENTITY(NRF_ERROR_FORBIDDEN),
     NRF_STRERROR_ENTITY(NRF_ERROR_INVALID_ADDR),
     NRF_STRERROR_ENTITY(NRF_ERROR_BUSY),
+#ifdef NRF_ERROR_CONN_COUNT
+    NRF_STRERROR_ENTITY(NRF_ERROR_CONN_COUNT),
+#endif
+#ifdef NRF_ERROR_RESOURCES
+    NRF_STRERROR_ENTITY(NRF_ERROR_RESOURCES),
+#endif
 
     /* SDK Common errors */
-    NRF_STRERROR_ENTITY(NRF_ERROR_MODULE_NOT_INITIALZED),
+    NRF_STRERROR_ENTITY(NRF_ERROR_MODULE_NOT_INITIALIZED),
     NRF_STRERROR_ENTITY(NRF_ERROR_MUTEX_INIT_FAILED),
     NRF_STRERROR_ENTITY(NRF_ERROR_MUTEX_LOCK_FAILED),
     NRF_STRERROR_ENTITY(NRF_ERROR_MUTEX_UNLOCK_FAILED),
@@ -104,11 +110,18 @@ static nrf_strerror_desc_t const nrf_strerror_array[] =
     NRF_STRERROR_ENTITY(NRF_ERROR_STORAGE_FULL),
     NRF_STRERROR_ENTITY(NRF_ERROR_API_NOT_IMPLEMENTED),
     NRF_STRERROR_ENTITY(NRF_ERROR_FEATURE_NOT_ENABLED),
+    NRF_STRERROR_ENTITY(NRF_ERROR_IO_PENDING),
 
     /* TWI error codes */
     NRF_STRERROR_ENTITY(NRF_ERROR_DRV_TWI_ERR_OVERRUN),
     NRF_STRERROR_ENTITY(NRF_ERROR_DRV_TWI_ERR_ANACK),
-    NRF_STRERROR_ENTITY(NRF_ERROR_DRV_TWI_ERR_DNACK)
+    NRF_STRERROR_ENTITY(NRF_ERROR_DRV_TWI_ERR_DNACK),
+
+    /* IPSP error codes */
+    NRF_STRERROR_ENTITY(NRF_ERROR_BLE_IPSP_RX_PKT_TRUNCATED),
+    NRF_STRERROR_ENTITY(NRF_ERROR_BLE_IPSP_CHANNEL_ALREADY_EXISTS),
+    NRF_STRERROR_ENTITY(NRF_ERROR_BLE_IPSP_LINK_DISCONNECTED),
+    NRF_STRERROR_ENTITY(NRF_ERROR_BLE_IPSP_PEER_REJECTED)
 };
 
 

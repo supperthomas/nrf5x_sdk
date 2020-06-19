@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2015 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2015 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,15 +35,16 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "ble_lns.h"
 #include "ble_ln_db.h"
 #include "ble_ln_common.h"
 #include "sdk_common.h"
 
-#define NRF_LOG_MODULE_NAME "BLE_LNS"
+#define NRF_LOG_MODULE_NAME ble_lns
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 // Location and Speed flag bits
 #define LOC_SPEED_FLAG_INSTANT_SPEED_PRESENT             (0x01 << 0)         /**< Instantaneous Speed Present bit. */
@@ -136,12 +137,23 @@ static void notification_buffer_process(ble_lns_t * p_lns)
  */
 static void on_connect(ble_lns_t * p_lns, ble_evt_t const * p_ble_evt)
 {
+    ret_code_t err_code;
+
     p_lns->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
     // clear pending notifications
     p_lns->pending_loc_speed_notifications[0].is_pending    = false;
     p_lns->pending_loc_speed_notifications[1].is_pending    = false;
     p_lns->pending_navigation_notification.is_pending       = false;
+
+    err_code = nrf_ble_gq_conn_handle_register(p_lns->p_gatt_queue, 
+                                               p_ble_evt->evt.gap_evt.conn_handle);
+
+    if ((p_lns->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS))
+    {
+        p_lns->error_handler(err_code);
+    }
 }
 
 
@@ -262,7 +274,7 @@ static void on_write(ble_lns_t * p_lns, ble_evt_t const * p_ble_evt)
         return;
     }
 
-    const ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
+    ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
     if (p_evt_write->handle == p_lns->ctrlpt_handles.cccd_handle)
     {
@@ -375,7 +387,7 @@ static uint8_t loc_speed_encode_packet1(ble_lns_t           const * p_lns,
     uint16_t flags = 0;
     uint8_t  len   = 2;
 
-    const ble_lncp_mask_t mask = ble_lncp_mask_get(&p_lns->ctrl_pt);
+    ble_lncp_mask_t const mask = ble_lncp_mask_get(&p_lns->ctrl_pt);
 
     // Instantaneous Speed
     if (p_lns->available_features & BLE_LNS_FEATURE_INSTANT_SPEED_SUPPORTED)
@@ -393,7 +405,7 @@ static uint8_t loc_speed_encode_packet1(ble_lns_t           const * p_lns,
     {
         if (p_loc_speed->total_distance_present && !mask.total_distance)
         {
-            const uint32_t total_distance = ble_lncp_total_distance_get(&p_lns->ctrl_pt);
+            uint32_t const total_distance = ble_lncp_total_distance_get(&p_lns->ctrl_pt);
             flags |= LOC_SPEED_FLAG_TOTAL_DISTANCE_PRESENT;
             len += uint24_encode(total_distance, &p_encoded_buffer[len]);
         }
@@ -434,17 +446,14 @@ static uint8_t loc_speed_encode_packet2(ble_lns_t           const * p_lns,
     uint16_t flags = 0;
     uint8_t  len   = 2;
 
-    const ble_lncp_mask_t mask = ble_lncp_mask_get(&p_lns->ctrl_pt);
-
-    flags = 0;
-    len = 2;
+    ble_lncp_mask_t const mask = ble_lncp_mask_get(&p_lns->ctrl_pt);
 
     // Elevation
     if (p_lns->available_features & BLE_LNS_FEATURE_ELEVATION_SUPPORTED)
     {
         if (p_loc_speed->elevation_present && !mask.elevation)
         {
-            const uint32_t elevation = ble_lncp_elevation_get(&p_lns->ctrl_pt);
+            uint32_t const elevation = ble_lncp_elevation_get(&p_lns->ctrl_pt);
 
             flags |= LOC_SPEED_FLAG_ELEVATION_PRESENT;
             flags |= ((uint16_t) p_loc_speed->elevation_source << 10) & LOC_SPEED_FLAG_ELEVATION_SOURCE;
@@ -635,12 +644,12 @@ static ret_code_t pos_quality_char_add(ble_lns_t * p_lns, ble_lns_init_t const *
 
     memset(&add_char_params, 0, sizeof(add_char_params));
 
-    add_char_params.uuid              = BLE_UUID_LN_POSITION_QUALITY_CHAR;
-    add_char_params.max_len           = BLE_GATT_ATT_MTU_DEFAULT ;
-    add_char_params.init_len          = len;
-    add_char_params.p_init_value      = init_value_encoded;
-    add_char_params.char_props.read   = true;
-    add_char_params.read_access       = p_lns_init->position_quality_security_req_read_perm;
+    add_char_params.uuid            = BLE_UUID_LN_POSITION_QUALITY_CHAR;
+    add_char_params.max_len         = BLE_GATT_ATT_MTU_DEFAULT ;
+    add_char_params.init_len        = len;
+    add_char_params.p_init_value    = init_value_encoded;
+    add_char_params.char_props.read = true;
+    add_char_params.read_access     = p_lns_init->position_quality_security_req_read_perm;
 
     return characteristic_add(p_lns->service_handle,
                               &add_char_params,
@@ -758,11 +767,12 @@ static bool init_param_mismatch_present(ble_lns_init_t const * p_lns_init)
 }
 
 
-void ble_lns_on_ble_evt(ble_lns_t * p_lns, ble_evt_t const * p_ble_evt)
+void ble_lns_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
-    VERIFY_PARAM_NOT_NULL_VOID(p_lns);
+    VERIFY_PARAM_NOT_NULL_VOID(p_context);
     VERIFY_PARAM_NOT_NULL_VOID(p_ble_evt);
 
+    ble_lns_t * p_lns = (ble_lns_t *)p_context;
     ble_lncp_on_ble_evt(&p_lns->ctrl_pt, p_ble_evt);
 
     switch (p_ble_evt->header.evt_id)
@@ -794,6 +804,7 @@ ret_code_t ble_lns_init(ble_lns_t * p_lns, ble_lns_init_t const * p_lns_init)
 {
     VERIFY_PARAM_NOT_NULL(p_lns);
     VERIFY_PARAM_NOT_NULL(p_lns_init);
+    VERIFY_PARAM_NOT_NULL(p_lns_init->p_gatt_queue);
 
     if (init_param_mismatch_present(p_lns_init) == true)
     {
@@ -805,23 +816,24 @@ ret_code_t ble_lns_init(ble_lns_t * p_lns, ble_lns_init_t const * p_lns_init)
     ble_lncp_init_t lncp_init;
 
     // Initialize service structure
-    p_lns->evt_handler                                   = p_lns_init->evt_handler;
-    p_lns->error_handler                                 = p_lns_init->error_handler;
-    p_lns->conn_handle                                   = BLE_CONN_HANDLE_INVALID;
-    p_lns->available_features                            = p_lns_init->available_features;
-    p_lns->is_navigation_present                         = p_lns_init->is_navigation_present;
+    p_lns->evt_handler           = p_lns_init->evt_handler;
+    p_lns->error_handler         = p_lns_init->error_handler;
+    p_lns->conn_handle           = BLE_CONN_HANDLE_INVALID;
+    p_lns->available_features    = p_lns_init->available_features;
+    p_lns->is_navigation_present = p_lns_init->is_navigation_present;
+    p_lns->p_gatt_queue          = p_lns_init->p_gatt_queue;
 
     // clear pending notifications
     p_lns->pending_loc_speed_notifications[0].is_pending = false;
     p_lns->pending_loc_speed_notifications[1].is_pending = false;
     p_lns->pending_navigation_notification.is_pending    = false;
 
-    p_lns->p_location_speed                              = p_lns_init->p_location_speed;
-    p_lns->p_position_quality                            = p_lns_init->p_position_quality;
-    p_lns->p_navigation                                  = p_lns_init->p_navigation;
+    p_lns->p_location_speed   = p_lns_init->p_location_speed;
+    p_lns->p_position_quality = p_lns_init->p_position_quality;
+    p_lns->p_navigation       = p_lns_init->p_navigation;
 
-    p_lns->is_loc_speed_notification_enabled             = false;
-    p_lns->is_nav_notification_enabled                   = false;
+    p_lns->is_loc_speed_notification_enabled = false;
+    p_lns->is_nav_notification_enabled       = false;
 
     ble_ln_db_init();
 
@@ -876,6 +888,7 @@ ret_code_t ble_lns_init(ble_lns_t * p_lns, ble_lns_init_t const * p_lns_init)
         lncp_init.available_features            = p_lns_init->available_features;
         lncp_init.is_position_quality_present   = p_lns_init->is_position_quality_present;
         lncp_init.is_navigation_present         = p_lns_init->is_navigation_present;
+        lncp_init.p_gatt_queue                  = p_lns_init->p_gatt_queue;
 
         lncp_init.total_distance                = p_lns_init->p_location_speed->total_distance;
         lncp_init.elevation                     = p_lns_init->p_location_speed->elevation;
@@ -890,7 +903,7 @@ ret_code_t ble_lns_init(ble_lns_t * p_lns, ble_lns_init_t const * p_lns_init)
         memcpy(&p_lns->ctrlpt_handles, &p_lns->ctrl_pt.ctrlpt_handles, sizeof(ble_gatts_char_handles_t));
     }
 
-    NRF_LOG_DEBUG("Initialized\r\n");
+    NRF_LOG_DEBUG("Initialized");
 
     return NRF_SUCCESS;
 }

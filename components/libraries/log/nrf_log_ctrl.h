@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #ifndef NRF_LOG_CTRL_H
 #define NRF_LOG_CTRL_H
@@ -54,8 +54,9 @@
 #include "sdk_errors.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "nrf_log_types.h"
 #include "nrf_log_ctrl_internal.h"
-
+#include "nrf_log_backend_interface.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -67,16 +68,17 @@ extern "C" {
  */
 typedef uint32_t (*nrf_log_timestamp_func_t)(void);
 
+
 /**@brief Macro for initializing the logs.
  *
- * @note If timestamps are disabled in the configuration, then the provided pointer
- * can be NULL. Otherwise, it is expected that timestamp_getter is not NULL.
- *
- * @param timestamp_func Function that returns the timestamp.
+ * Macro has one or two parameters. First parameter (obligatory) is the timestamp function (@ref nrf_log_timestamp_func_t).
+ * Additionally, as the second parameter timestamp frequency in Hz can be provided. If not provided then default
+ * frequency is used (@ref  NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY). Frequency is used to format timestamp prefix if
+ * @ref NRF_LOG_STR_FORMATTER_TIMESTAMP_FORMAT_ENABLED is set.
  *
  * @return  NRF_SUCCESS after successful initialization, otherwise an error code.
  */
-#define NRF_LOG_INIT(timestamp_func) NRF_LOG_INTERNAL_INIT(timestamp_func)
+#define NRF_LOG_INIT(...) NRF_LOG_INTERNAL_INIT(__VA_ARGS__)
 
 
 /**@brief Macro for processing a single log entry from a queue of deferred logs.
@@ -106,66 +108,6 @@ typedef uint32_t (*nrf_log_timestamp_func_t)(void);
  */
 #define NRF_LOG_FINAL_FLUSH() NRF_LOG_INTERNAL_FINAL_FLUSH()
 
-/** @brief Macro for changing functions that are used to handle log entries.
- *
- * @param default_handler Function for handling log entries.
- * @param bytes_handler   Function for handling hexdump entries.
- *
- */
-#define NRF_LOG_HANDLERS_SET(default_handler, bytes_handler) \
-    NRF_LOG_INTERNAL_HANDLERS_SET(default_handler, bytes_handler)
-
-/**
- * @brief Function prototype for handling a log entry.
- *
- * The backend must implement such prototype.
- *
- * @param severity_level Severity level of the entry.
- * @param p_timestamp    Pointer to the timestamp value. No timestamp if NULL.
- * @param p_str          Pointer to a formatted string.
- * @param p_args         Pointer to an array of arguments for a formatted string.
- * @param nargs          Number of arguments in p_args.
- *
- * @retval true          If entry is successfully processed.
- * @retval false         If entry is not processed.
- */
-typedef bool (*nrf_log_std_handler_t)(
-    uint8_t                severity_level,
-    const uint32_t * const p_timestamp,
-    const char * const     p_str,
-    uint32_t             * p_args,
-    uint32_t               nargs);
-
-/**
- * @brief Function prototype for handling a bytes-dumping log entry.
- *
- * The backend must implement such prototype. Two buffers are needed because data
- * is stored internally in a circular buffer so it can be fragmented into up to
- * two pieces.
- *
- * @param severity_level Severity level of the entry.
- * @param p_timestamp    Pointer to a timestamp value. No timestamp if NULL.
- * @param p_str          Prefix string for the bytes dump.
- * @param offset         Indication of how many bytes have already been processed.
- * @param p_buf0         Pointer to the first part of data.
- * @param buf0_length    Number of bytes in the first part.
- * @param p_buf1         Pointer to the second part of data. Optional.
- * @param buf1_length    Number of bytes in the second part.
- *
- * @return Number of bytes processed. If all bytes are processed, it should be a sum of
- *         buf0_length and buf1_length
- */
-typedef uint32_t (*nrf_log_hexdump_handler_t)(
-    uint8_t                severity_level,
-    const uint32_t * const p_timestamp,
-    const char * const     p_str,
-    uint32_t               offset,
-    const uint8_t * const  p_buf0,
-    uint32_t               buf0_length,
-    const uint8_t * const  p_buf1,
-    uint32_t               buf1_length);
-
-
 /**
  * @brief Function for initializing the frontend and the default backend.
  *
@@ -174,46 +116,38 @@ typedef uint32_t (*nrf_log_hexdump_handler_t)(
  * Instead, frontend and user backend should be verbosely initialized.
  *
  * @param timestamp_func Function for getting a 32-bit timestamp.
+ * @param timestamp_freq Frequency of the timestamp.
  *
  * @return Error status.
  *
  */
-ret_code_t nrf_log_init(nrf_log_timestamp_func_t timestamp_func);
+ret_code_t nrf_log_init(nrf_log_timestamp_func_t timestamp_func, uint32_t timestamp_freq);
 
 /**
- * @brief Function for reinitializing the backend in blocking mode.
+ * @brief Function for adding new backend interface to the logger.
+ *
+ * @param p_backend Pointer to the backend interface.
+ * @param severity  Initial value of severity level for each module forwarded to the backend. This
+ *                  option is only applicable if @ref NRF_LOG_FILTERS_ENABLED is set.
+ * @return -1 if backend cannot be added or positive number (backend ID).
  */
-ret_code_t nrf_log_blocking_backend_set(void);
+int32_t nrf_log_backend_add(nrf_log_backend_t const * p_backend, nrf_log_severity_t severity);
 
 /**
- * @brief Function for initializing the logger frontend.
+ * @brief Function for removing backend from the logger.
  *
- * The frontend is initialized with functions for handling log entries. Those
- * functions are provided by the backend.
+ * @param p_backend Pointer to the backend interface.
  *
- * @note This function needs to be called directly only if the @ref NRF_LOG_INIT macro
- * is not used to initialize the logger.
- *
- * @param std_handler      Function for handling standard log entries.
- * @param hexdump_handler  Function for handling hexdump log entries.
- * @param timestamp_func   Function for getting a timestamp. It cannot be NULL
- *                         unless timestamping is disabled.
  */
-void nrf_log_frontend_init(nrf_log_std_handler_t     std_handler,
-                           nrf_log_hexdump_handler_t hexdump_handler,
-                           nrf_log_timestamp_func_t  timestamp_func);
+void nrf_log_backend_remove(nrf_log_backend_t const * p_backend);
 
 /**
- * @brief Function for updating functions that handle log entries.
+ * @brief Function for setting logger backends into panic mode.
  *
- * @note Use this feature to change the log handling behavior in certain
- * situations, like in a fault handler.
- *
- * @param std_handler      Function for handling standard log entries.
- * @param hexdump_handler  Function for handling hexdump log entries.
+ * When this function is called all attached backends are informed about panic state of the system.
+ * It is up to the backend to react properly (hold or process logs in blocking mode, etc.)
  */
-void nrf_log_handlers_set(nrf_log_std_handler_t     std_handler,
-                          nrf_log_hexdump_handler_t hexdump_handler);
+void nrf_log_panic(void);
 
 /**
  * @brief Function for handling a single log entry.
@@ -225,6 +159,78 @@ void nrf_log_handlers_set(nrf_log_std_handler_t     std_handler,
  * @retval false If there are no more entries to process.
  */
 bool nrf_log_frontend_dequeue(void);
+
+/**
+ * @brief Function for getting number of independent log modules registered into the logger.
+ *
+ * @return Number of registered modules.
+ */
+uint32_t nrf_log_module_cnt_get(void);
+
+/**
+ * @brief Function for getting module name.
+ *
+ * @param module_id      Module ID.
+ * @param is_ordered_idx Module ID is given is index in alphabetically sorted list of modules.
+ * @return Pointer to string with module name.
+ */
+const char * nrf_log_module_name_get(uint32_t module_id, bool is_ordered_idx);
+
+/**
+ * @brief Function for getting coloring of specific logs.
+ *
+ * @param module_id Module ID.
+ * @param severity  Log severity.
+ *
+ * @return ID of the color.
+ */
+uint8_t nrf_log_color_id_get(uint32_t module_id, nrf_log_severity_t severity);
+
+/**
+ * @brief Function for configuring filtering ofs logs in the module.
+ *
+ * Filtering of logs in modules is independent for each backend.
+ *
+ * @param backend_id Backend ID which want to chenge its configuration.
+ * @param module_id  Module ID which logs will be reconfigured.
+ * @param severity   New severity filter.
+ */
+void nrf_log_module_filter_set(uint32_t backend_id,
+                               uint32_t module_id,
+                               nrf_log_severity_t severity);
+
+/**
+ * @brief Function for getting module severity level.
+ *
+ * @param backend_id     Backend ID.
+ * @param module_id      Module ID.
+ * @param is_ordered_idx Module ID is given is index in alphabetically sorted list of modules.
+ * @param dynamic        It true current filter for given backend is returned. If false then
+ *                       compiled-in level is returned (maximum available). If this parameter is
+ *                       false then backend_id parameter is not used.
+ *
+ * @return Severity.
+ */
+nrf_log_severity_t nrf_log_module_filter_get(uint32_t backend_id,
+                                             uint32_t module_id,
+                                             bool     is_ordered_idx,
+                                             bool     dynamic);
+
+/**
+ * @brief Function stores current filtering configuration into non-volatile memory using @ref fds module.
+ *
+ * @return NRF_SUCCESS or @ref fds error code.
+ */
+ret_code_t nrf_log_config_store(void);
+
+/**
+ * @brief Function loads configuration from non-volatile memory using @ref fds module.
+ *
+ * @retval NRF_SUCCESS         On successful loading.
+ * @retval NRF_ERROR_NOT_FOUND Configuration file not found.
+ * @retval NRF_ERROR_INTERNAL  Other @ref fds error on reading configuration file.
+ */
+ret_code_t nrf_log_config_load(void);
 
 #ifdef __cplusplus
 }

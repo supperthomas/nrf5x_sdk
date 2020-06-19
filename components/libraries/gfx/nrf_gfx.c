@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2017 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2017 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 
 #include "sdk_common.h"
@@ -47,9 +47,9 @@
 #include "app_util_platform.h"
 #include "nrf_assert.h"
 
-#define NRF_LOG_MODULE_NAME "GFX"
+#define NRF_LOG_MODULE_NAME gfx
 #include "nrf_log.h"
-#include "nrf_log_ctrl.h"
+NRF_LOG_MODULE_REGISTER();
 
 static inline void pixel_draw(nrf_lcd_t const * p_instance,
                               uint16_t x,
@@ -191,7 +191,7 @@ static void write_character(nrf_lcd_t const * p_instance,
 ret_code_t nrf_gfx_init(nrf_lcd_t const * p_instance)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state == NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state == NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_instance->lcd_init != NULL);
     ASSERT(p_instance->lcd_uninit != NULL);
     ASSERT(p_instance->lcd_pixel_draw != NULL);
@@ -207,7 +207,7 @@ ret_code_t nrf_gfx_init(nrf_lcd_t const * p_instance)
 
     if (err_code == NRF_SUCCESS)
     {
-        p_instance->p_lcd_cb->state = NRF_DRV_STATE_INITIALIZED;
+        p_instance->p_lcd_cb->state = NRFX_DRV_STATE_INITIALIZED;
     }
 
     return err_code;
@@ -216,9 +216,9 @@ ret_code_t nrf_gfx_init(nrf_lcd_t const * p_instance)
 void nrf_gfx_uninit(nrf_lcd_t const * p_instance)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
 
-    p_instance->p_lcd_cb->state = NRF_DRV_STATE_UNINITIALIZED;
+    p_instance->p_lcd_cb->state = NRFX_DRV_STATE_UNINITIALIZED;
 
     p_instance->lcd_uninit();
 }
@@ -228,7 +228,7 @@ void nrf_gfx_point_draw(nrf_lcd_t const * p_instance,
                         uint32_t color)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_point != NULL);
 
     pixel_draw(p_instance, p_point->x, p_point->y, color);
@@ -239,7 +239,7 @@ ret_code_t nrf_gfx_line_draw(nrf_lcd_t const * p_instance,
                              uint32_t color)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_line != NULL);
 
     uint16_t x_thick = 0;
@@ -317,7 +317,7 @@ ret_code_t nrf_gfx_circle_draw(nrf_lcd_t const * p_instance,
                                bool fill)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_circle != NULL);
 
     int16_t y = 0;
@@ -383,7 +383,7 @@ ret_code_t nrf_gfx_rect_draw(nrf_lcd_t const * p_instance,
                              bool fill)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_rect != NULL);
 
     uint16_t rect_width = p_rect->width - thickness;
@@ -453,7 +453,7 @@ ret_code_t nrf_gfx_bmp565_draw(nrf_lcd_t const * p_instance,
                                uint16_t const * img_buf)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_rect != NULL);
     ASSERT(img_buf != NULL);
 
@@ -484,7 +484,7 @@ ret_code_t nrf_gfx_bmp565_draw(nrf_lcd_t const * p_instance,
 void nrf_gfx_background_set(nrf_lcd_t const * p_instance, uint16_t const * img_buf)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(img_buf != NULL);
 
     const nrf_gfx_rect_t rectangle =
@@ -508,7 +508,7 @@ void nrf_gfx_display(nrf_lcd_t const * p_instance)
 void nrf_gfx_rotation_set(nrf_lcd_t const * p_instance, nrf_lcd_rotation_t rotation)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
 
     bool rotated = (bool)(p_instance->p_lcd_cb->rotation % 2);
 
@@ -558,7 +558,7 @@ ret_code_t nrf_gfx_print(nrf_lcd_t const * p_instance,
                          bool wrap)
 {
     ASSERT(p_instance != NULL);
-    ASSERT(p_instance->p_lcd_cb->state != NRF_DRV_STATE_UNINITIALIZED);
+    ASSERT(p_instance->p_lcd_cb->state != NRFX_DRV_STATE_UNINITIALIZED);
     ASSERT(p_point != NULL);
     ASSERT(string != NULL);
     ASSERT(p_font != NULL);

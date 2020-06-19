@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2012 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2012 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,17 +35,17 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 /* Attention!
-*  To maintain compliance with Nordic Semiconductor ASA’s Bluetooth profile
-*  qualification listings, this section of source code must not be modified.
-*/
+ * To maintain compliance with Nordic Semiconductor ASA's Bluetooth profile
+ * qualification listings, this section of source code must not be modified.
+ */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(BLE_HTS)
+#include "ble_err.h"
 #include "ble_hts.h"
 #include <string.h>
-#include "ble_l2cap.h"
 #include "ble_srv_common.h"
 
 
@@ -59,14 +59,43 @@
 #define HTS_MEAS_FLAG_TEMP_TYPE_BIT  (0x01 << 2)  /**< Temperature Type flag. */
 
 
+/**@brief Function for interception of GATT errors and @ref nrf_ble_gq errors.
+ *
+ * @param[in] nrf_error   Error code.
+ * @param[in] p_ctx       Parameter from the event handler.
+ * @param[in] conn_handle Connection handle.
+ */
+static void gatt_error_handler(uint32_t   nrf_error,
+                               void     * p_ctx,
+                               uint16_t   conn_handle)
+{
+    ble_hts_t * p_hts = (ble_hts_t *)p_ctx;
+
+    if (p_hts->error_handler != NULL)
+    {
+        p_hts->error_handler(nrf_error);
+    }
+}
+
+
 /**@brief Function for handling the Connect event.
  *
  * @param[in]   p_hts       Health Thermometer Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_connect(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
+static void on_connect(ble_hts_t * p_hts, ble_evt_t const * p_ble_evt)
 {
+    ret_code_t err_code;
+
     p_hts->conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
+
+    err_code = nrf_ble_gq_conn_handle_register(p_hts->p_gatt_queue, p_hts->conn_handle);
+
+    if ((p_hts->error_handler != NULL) &&
+        (err_code != NRF_SUCCESS))
+    {
+        p_hts->error_handler(err_code);
+    }
 }
 
 
@@ -75,7 +104,7 @@ static void on_connect(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
  * @param[in]   p_hts       Health Thermometer Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_disconnect(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
+static void on_disconnect(ble_hts_t * p_hts, ble_evt_t const * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_hts->conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -87,7 +116,7 @@ static void on_disconnect(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
  * @param[in]   p_hts         Health Thermometer Service structure.
  * @param[in]   p_evt_write   Write event received from the BLE stack.
  */
-static void on_cccd_write(ble_hts_t * p_hts, ble_gatts_evt_write_t * p_evt_write)
+static void on_cccd_write(ble_hts_t * p_hts, ble_gatts_evt_write_t const * p_evt_write)
 {
     if (p_evt_write->len == 2)
     {
@@ -116,9 +145,9 @@ static void on_cccd_write(ble_hts_t * p_hts, ble_gatts_evt_write_t * p_evt_write
  * @param[in]   p_hts       Health Thermometer Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_write(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
+static void on_write(ble_hts_t * p_hts, ble_evt_t const * p_ble_evt)
 {
-    ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
+    ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
     if (p_evt_write->handle == p_hts->meas_handles.cccd_handle)
     {
@@ -134,9 +163,9 @@ static void on_write(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
  * @param[in]   p_hts       Health Thermometer Service structure.
  * @param[in]   p_ble_evt   Event received from the BLE stack.
  */
-static void on_hvc(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
+static void on_hvc(ble_hts_t * p_hts, ble_evt_t const * p_ble_evt)
 {
-    ble_gatts_evt_hvc_t * p_hvc = &p_ble_evt->evt.gatts_evt.params.hvc;
+    ble_gatts_evt_hvc_t const * p_hvc = &p_ble_evt->evt.gatts_evt.params.hvc;
 
     if (p_hvc->handle == p_hts->meas_handles.value_handle)
     {
@@ -148,8 +177,10 @@ static void on_hvc(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
 }
 
 
-void ble_hts_on_ble_evt(ble_hts_t * p_hts, ble_evt_t * p_ble_evt)
+void ble_hts_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
+    ble_hts_t * p_hts = (ble_hts_t *)p_context;
+
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
@@ -237,130 +268,24 @@ static uint8_t hts_measurement_encode(ble_hts_t      * p_hts,
 }
 
 
-/**@brief Function for adding Health Thermometer Measurement characteristics.
- *
- * @param[in]   p_hts        Health Thermometer Service structure.
- * @param[in]   p_hts_init   Information needed to initialize the service.
- *
- * @return      NRF_SUCCESS on success, otherwise an error code.
- */
-static uint32_t hts_measurement_char_add(ble_hts_t * p_hts, const ble_hts_init_t * p_hts_init)
+uint32_t ble_hts_init(ble_hts_t * p_hts, ble_hts_init_t const * p_hts_init)
 {
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_md_t cccd_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
-    ble_hts_meas_t      initial_htm;
-    uint8_t             encoded_htm[MAX_HTM_LEN];
+    VERIFY_PARAM_NOT_NULL(p_hts);
+    VERIFY_PARAM_NOT_NULL(p_hts_init);
+    VERIFY_PARAM_NOT_NULL(p_hts_init->p_gatt_queue);
 
-    memset(&cccd_md, 0, sizeof(cccd_md));
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.read_perm);
-    cccd_md.vloc = BLE_GATTS_VLOC_STACK;
-    cccd_md.write_perm = p_hts_init->hts_meas_attr_md.cccd_write_perm;
-
-    memset(&char_md, 0, sizeof(char_md));
-
-    char_md.char_props.indicate = 1;
-    char_md.p_char_user_desc    = NULL;
-    char_md.p_char_pf           = NULL;
-    char_md.p_user_desc_md      = NULL;
-    char_md.p_cccd_md           = &cccd_md;
-    char_md.p_sccd_md           = NULL;
-
-    BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_TEMPERATURE_MEASUREMENT_CHAR);
-
-    memset(&attr_md, 0, sizeof(attr_md));
-
-    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md.read_perm  = p_hts_init->hts_meas_attr_md.read_perm;
-    attr_md.write_perm = p_hts_init->hts_meas_attr_md.write_perm;
-    attr_md.rd_auth    = 0;
-    attr_md.wr_auth    = 0;
-    attr_md.vlen       = 1;
-
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-    memset(&initial_htm, 0, sizeof(initial_htm));
-
-    attr_char_value.p_uuid    = &ble_uuid;
-    attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = hts_measurement_encode(p_hts, &initial_htm, encoded_htm);
-    attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = MAX_HTM_LEN;
-    attr_char_value.p_value   = encoded_htm;
-
-    return sd_ble_gatts_characteristic_add(p_hts->service_handle,
-                                           &char_md,
-                                           &attr_char_value,
-                                           &p_hts->meas_handles);
-}
-
-
-/**@brief Function for adding Temperature Type characteristics.
- *
- * @param[in]   p_hts        Health Thermometer Service structure.
- * @param[in]   p_hts_init   Information needed to initialize the service.
- *
- * @return      NRF_SUCCESS on success, otherwise an error code.
- */
-static uint32_t hts_temp_type_char_add(ble_hts_t * p_hts, const ble_hts_init_t * p_hts_init)
-{
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
-    uint8_t             init_value_temp_type;
-    uint8_t             init_value_encoded[1];
-
-    memset(&char_md, 0, sizeof(char_md));
-
-    char_md.char_props.read  = 1;
-    char_md.p_char_user_desc = NULL;
-    char_md.p_char_pf        = NULL;
-    char_md.p_user_desc_md   = NULL;
-    char_md.p_cccd_md        = NULL;
-    char_md.p_sccd_md        = NULL;
-
-    BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_TEMPERATURE_TYPE_CHAR);
-
-    memset(&attr_md, 0, sizeof(attr_md));
-
-    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md.read_perm  = p_hts_init->hts_temp_type_attr_md.read_perm;
-    attr_md.write_perm = p_hts_init->hts_temp_type_attr_md.write_perm;
-    attr_md.rd_auth    = 0;
-    attr_md.wr_auth    = 0;
-    attr_md.vlen       = 0;
-
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-
-    init_value_temp_type  = p_hts_init->temp_type;
-    init_value_encoded[0] = init_value_temp_type;
-
-    attr_char_value.p_uuid    = &ble_uuid;
-    attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = sizeof (uint8_t);
-    attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = sizeof (uint8_t);
-    attr_char_value.p_value   = init_value_encoded;
-
-    return sd_ble_gatts_characteristic_add(p_hts->service_handle,
-                                           &char_md,
-                                           &attr_char_value,
-                                           &p_hts->temp_type_handles);
-}
-
-
-uint32_t ble_hts_init(ble_hts_t * p_hts, const ble_hts_init_t * p_hts_init)
-{
-    uint32_t   err_code;
-    ble_uuid_t ble_uuid;
+    uint32_t              err_code;
+    uint8_t               init_value[MAX_HTM_LEN];
+    ble_hts_meas_t        initial_htm;
+    ble_uuid_t            ble_uuid;
+    ble_add_char_params_t add_char_params;
 
     // Initialize service structure
-    p_hts->evt_handler = p_hts_init->evt_handler;
-    p_hts->conn_handle = BLE_CONN_HANDLE_INVALID;
-    p_hts->temp_type   = p_hts_init->temp_type;
+    p_hts->evt_handler   = p_hts_init->evt_handler;
+    p_hts->p_gatt_queue  = p_hts_init->p_gatt_queue;
+    p_hts->error_handler = p_hts_init->error_handler;
+    p_hts->conn_handle   = BLE_CONN_HANDLE_INVALID;
+    p_hts->temp_type     = p_hts_init->temp_type;
 
     // Add service
     BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_HEALTH_THERMOMETER_SERVICE);
@@ -372,7 +297,18 @@ uint32_t ble_hts_init(ble_hts_t * p_hts, const ble_hts_init_t * p_hts_init)
     }
 
     // Add measurement characteristic
-    err_code = hts_measurement_char_add(p_hts, p_hts_init);
+    memset(&add_char_params, 0, sizeof(add_char_params));
+    memset(&initial_htm, 0, sizeof(initial_htm));
+
+    add_char_params.uuid                = BLE_UUID_TEMPERATURE_MEASUREMENT_CHAR;
+    add_char_params.init_len            = hts_measurement_encode(p_hts, &initial_htm, init_value);
+    add_char_params.max_len             = MAX_HTM_LEN;
+    add_char_params.p_init_value        = init_value;
+    add_char_params.is_var_len          = true;
+    add_char_params.char_props.indicate = 1;
+    add_char_params.cccd_write_access   = p_hts_init->ht_meas_cccd_wr_sec;
+
+    err_code = characteristic_add(p_hts->service_handle, &add_char_params, &p_hts->meas_handles);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
@@ -381,7 +317,18 @@ uint32_t ble_hts_init(ble_hts_t * p_hts, const ble_hts_init_t * p_hts_init)
     // Add temperature type characteristic
     if (p_hts_init->temp_type_as_characteristic)
     {
-        err_code = hts_temp_type_char_add(p_hts, p_hts_init);
+        memset(&add_char_params, 0, sizeof(add_char_params));
+
+        add_char_params.uuid            = BLE_UUID_TEMPERATURE_TYPE_CHAR;
+        add_char_params.max_len         = sizeof(uint8_t);
+        add_char_params.char_props.read = 1;
+        add_char_params.read_access     = p_hts_init->ht_type_rd_sec;
+        add_char_params.init_len        = sizeof(uint8_t);
+        add_char_params.p_init_value    = (uint8_t *) &(p_hts_init->temp_type);
+
+        err_code = characteristic_add(p_hts->service_handle,
+                                      &add_char_params,
+                                      &p_hts->temp_type_handles);
         if (err_code != NRF_SUCCESS)
         {
             return err_code;
@@ -399,27 +346,24 @@ uint32_t ble_hts_measurement_send(ble_hts_t * p_hts, ble_hts_meas_t * p_hts_meas
     // Send value if connected
     if (p_hts->conn_handle != BLE_CONN_HANDLE_INVALID)
     {
-        uint8_t                encoded_hts_meas[MAX_HTM_LEN];
-        uint16_t               len;
-        uint16_t               hvx_len;
-        ble_gatts_hvx_params_t hvx_params;
+        uint8_t          encoded_hts_meas[MAX_HTM_LEN];
+        uint16_t         len;
+        nrf_ble_gq_req_t hts_req;
 
         len     = hts_measurement_encode(p_hts, p_hts_meas, encoded_hts_meas);
-        hvx_len = len;
 
-        memset(&hvx_params, 0, sizeof(hvx_params));
+        memset(&hts_req, 0, sizeof(nrf_ble_gq_req_t));
 
-        hvx_params.handle = p_hts->meas_handles.value_handle;
-        hvx_params.type   = BLE_GATT_HVX_INDICATION;
-        hvx_params.offset = 0;
-        hvx_params.p_len  = &hvx_len;
-        hvx_params.p_data = encoded_hts_meas;
+        hts_req.type                               = NRF_BLE_GQ_REQ_GATTS_HVX;
+        hts_req.error_handler.cb                   = gatt_error_handler;
+        hts_req.error_handler.p_ctx                = p_hts;
+        hts_req.params.gatts_hvx.handle  = p_hts->meas_handles.value_handle;
+        hts_req.params.gatts_hvx.offset  = 0;
+        hts_req.params.gatts_hvx.p_data  = encoded_hts_meas;
+        hts_req.params.gatts_hvx.p_len   = &len;
+        hts_req.params.gatts_hvx.type    = BLE_GATT_HVX_INDICATION;
 
-        err_code = sd_ble_gatts_hvx(p_hts->conn_handle, &hvx_params);
-        if ((err_code == NRF_SUCCESS) && (hvx_len != len))
-        {
-            err_code = NRF_ERROR_DATA_SIZE;
-        }
+        err_code = nrf_ble_gq_item_add(p_hts->p_gatt_queue, &hts_req, p_hts->conn_handle);
     }
     else
     {

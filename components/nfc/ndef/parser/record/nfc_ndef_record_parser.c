@@ -1,30 +1,30 @@
 /**
- * Copyright (c) 2016 - 2017, Nordic Semiconductor ASA
- * 
+ * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form, except as embedded into a Nordic
  *    Semiconductor ASA integrated circuit in a product or a software update for
  *    such product, must reproduce the above copyright notice, this list of
  *    conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * 4. This software, with or without modification, must only be used with a
  *    Nordic Semiconductor ASA integrated circuit.
- * 
+ *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  */
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(NFC_NDEF_RECORD_PARSER)
@@ -47,14 +47,16 @@
 #include "nordic_common.h"
 #include "nrf_delay.h"
 
-#define NRF_LOG_MODULE_NAME "NFC_NDEF_PARSER"
+#define NRF_LOG_MODULE_NAME nfc_ndef_parser
 #if NFC_NDEF_RECORD_PARSER_LOG_ENABLED
 #define NRF_LOG_LEVEL       NFC_NDEF_RECORD_PARSER_LOG_LEVEL
 #define NRF_LOG_INFO_COLOR  NFC_NDEF_RECORD_PARSER_INFO_COLOR
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 #else // NFC_NDEF_RECORD_PARSER_LOG_ENABLED
 #define NRF_LOG_LEVEL       0
-#endif // NFC_NDEF_RECORD_PARSER_LOG_ENABLED
 #include "nrf_log.h"
+#endif // NFC_NDEF_RECORD_PARSER_LOG_ENABLED
 
 /* Sum of sizes of fields: TNF-flags, Type Length, Payload Length in short NDEF record. */
 #define NDEF_RECORD_BASE_LONG_SHORT (2 + NDEF_RECORD_PAYLOAD_LEN_SHORT_SIZE)
@@ -171,30 +173,30 @@ ret_code_t ndef_record_parser(nfc_ndef_bin_payload_desc_t * p_bin_pay_desc,
 
 char const * const tnf_strings[] =
 {
-    "Empty\r\n",
-    "NFC Forum well-known type\r\n",
-    "Media-type (RFC 2046)\r\n",
-    "Absolute URI (RFC 3986)\r\n",
-    "NFC Forum external type (NFC RTD)\r\n",
-    "Unknown\r\n",
-    "Unchanged\r\n",
-    "Reserved\r\n"
+    "Empty",
+    "NFC Forum well-known type",
+    "Media-type (RFC 2046)",
+    "Absolute URI (RFC 3986)",
+    "NFC Forum external type (NFC RTD)",
+    "Unknown",
+    "Unchanged",
+    "Reserved"
 };
 
 void ndef_record_printout(uint32_t num, nfc_ndef_record_desc_t * const p_rec_desc)
 {
-    NRF_LOG_INFO("NDEF record %d content:\r\n", num);
+    NRF_LOG_INFO("NDEF record %d content:", num);
     NRF_LOG_INFO("TNF: %s",(uint32_t)tnf_strings[p_rec_desc->tnf]);
 
     if (p_rec_desc->p_id != NULL)
     {
-        NRF_LOG_INFO("ID:\r\n");
+        NRF_LOG_INFO("ID:");
         NRF_LOG_HEXDUMP_INFO((uint8_t *)p_rec_desc->p_id, p_rec_desc->id_length);
     }
 
     if (p_rec_desc->p_type != NULL)
     {
-        NRF_LOG_INFO("type:\r\n");
+        NRF_LOG_INFO("type:");
         NRF_LOG_HEXDUMP_INFO((uint8_t *)p_rec_desc->p_type, p_rec_desc->type_length);
     }
 
@@ -204,15 +206,14 @@ void ndef_record_printout(uint32_t num, nfc_ndef_record_desc_t * const p_rec_des
 
         if (p_bin_pay_desc->p_payload != NULL)
         {
-            NRF_LOG_INFO("Payload data (%d bytes):\r\n", p_bin_pay_desc->payload_length);
-            NRF_LOG_HEXDUMP_INFO((uint8_t *)p_bin_pay_desc->p_payload, p_bin_pay_desc->payload_length);
+            NRF_LOG_INFO("Payload length: %d bytes", p_bin_pay_desc->payload_length);
+            NRF_LOG_HEXDUMP_DEBUG((uint8_t *)p_bin_pay_desc->p_payload, p_bin_pay_desc->payload_length);
         }
         else
         {
-            NRF_LOG_INFO("No payload\r\n");
+            NRF_LOG_INFO("No payload");
         }
     }
-    NRF_LOG_INFO("\r\n\r\n");
 }
 
 #endif // NRF_MODULE_ENABLED(NFC_NDEF_RECORD_PARSER)
