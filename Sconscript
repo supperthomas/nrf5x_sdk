@@ -1,0 +1,62 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+# get current directory
+cwd = GetCurrentDir()
+
+if GetDepend(['BSP_USING_SOFTDEVICE']):
+    SOFTDEVICE = Split('''
+    ./components/softdevice/common/nrf_sdh.c
+
+    ./integration/nrfx/legacy/nrf_drv_clock.c
+    ./components/libraries/util/app_error_weak.c
+    ./components/libraries/experimental_section_vars/nrf_section_iter.c
+    ./components/libraries/util/app_util_platform.c
+    ./components/libraries/util/app_error.c
+    ./components/libraries/strerror/nrf_strerror.c
+    ./rtt_adapter/nrf_sdh_ble_rtt.c
+    ./rtt_adapter/ble_app_beacon.c
+    ''')
+
+
+    BLE_ADVERTISING = Split('''
+    ./components/ble/common/ble_advdata.c
+    ''')
+
+    BLE_SERVICE = Split('''
+    ''')
+
+
+
+    SOFTDEVICE_SRC = SOFTDEVICE  + BLE_SERVICE + BLE_ADVERTISING
+
+    path = [cwd + '/components/libraries/util']
+    path += [cwd + '/components/libraries/experimental_section_vars']
+    path += [cwd + '/components/libraries/log']
+    path += [cwd + '/components/libraries/log/src']
+    path += [cwd + '/components/libraries/strerror']
+    path += [cwd + '/components/libraries/memobj']
+    path += [cwd + '/components/libraries/balloc']
+
+
+    path += [cwd + '/components/ble/common']
+
+    path += [cwd + '/components/ble/common']
+
+    path += [cwd + '/components/softdevice/s140/headers']
+    path += [cwd + '/components/softdevice/common']
+
+    path += [cwd + '/components/softdevice/s140/headers/nrf52']
+
+    path += [cwd + '/integration/nrfx/legacy']
+    CPPDEFINES = ['SOFTDEVICE_PRESENT', 'CONFIG_GPIO_AS_PINRESET']
+else:
+    SOFTDEVICE_SRC = Split('''
+    ''')
+    path = ['']
+    CPPDEFINES = ['']
+
+group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+
+Return('group')
