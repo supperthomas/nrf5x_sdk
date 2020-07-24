@@ -8,8 +8,9 @@ cwd = GetCurrentDir()
 
 if GetDepend(['BSP_USING_SOFTDEVICE']):
     source = cwd + r'\templete_project\pca10056\template.*'
-    target = cwd + r'"..\..\"'
+    target = cwd + r'"..\..\..\"'
     copy_command = 'copy "' + source + r'" "' + target + r'"'
+    print(copy_command)
     os.system(copy_command)
     SOFTDEVICE = Split('''
     ./components/softdevice/common/nrf_sdh.c
