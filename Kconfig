@@ -4,30 +4,29 @@ menu "softdevice support sample Config"
     default y
 endmenu
 
-menu "softdevice Drivers SDK Config"
-    config NRFX_CLOCK_ENABLED
-    int "NRFX_CLOCK_ENABLED"
-    default 1
-    config NRFX_CLOCK_DEFAULT_CONFIG_IRQ_PRIORITY
-    int "NRFX_CLOCK_DEFAULT_CONFIG_IRQ_PRIORITY"
-    default 7
-    config NRFX_RTC_ENABLED
-    int "NRFX_RTC_ENABLED"
-    default 1
-    config NRFX_RTC1_ENABLED
-    int "NRFX_RTC1_ENABLED"
-    default 1
-    config NRF_CLOCK_ENABLED
-    int "NRF_CLOCK_ENABLED"
-    default 1
-    config NRF_SDH_BLE_ENABLED
-    int "NRF_SDH_BLE_ENABLED"
-    default 1
-    config NRF_SDH_ENABLED
-    int "NRF_SDH_ENABLED"
-    default 1
-    config NRF_SDH_SOC_ENABLED
-    int "NRF_SDH_SOC_ENABLED"
-    default 1
-endmenu
+config NRFX_CLOCK_ENABLED
+int 
+default 1
+config NRFX_CLOCK_DEFAULT_CONFIG_IRQ_PRIORITY
+int 
+default 7
+config NRFX_RTC_ENABLED
+int 
+default 1
+config NRFX_RTC1_ENABLED
+int 
+default 1
+config NRF_CLOCK_ENABLED
+int 
+default 1
+config NRF_SDH_BLE_ENABLED
+int 
+default 1
+config NRF_SDH_ENABLED
+int 
+default 1
+config NRF_SDH_SOC_ENABLED
+int 
+default 1
+
 
