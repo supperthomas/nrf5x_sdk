@@ -57,12 +57,12 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
 
     path += [cwd + '/integration/nrfx/legacy']
     CPPDEFINES = ['SOFTDEVICE_PRESENT', 'CONFIG_GPIO_AS_PINRESET']
+    group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
 else:
     SOFTDEVICE_SRC = Split('''
     ''')
-    path = ['']
-    CPPDEFINES = ['']
+    group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''])
 
-group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+
 
 Return('group')
