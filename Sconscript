@@ -7,7 +7,11 @@ import os
 cwd = GetCurrentDir()
 
 if GetDepend(['BSP_USING_SOFTDEVICE']):
-    source = cwd + r'\templete_project\pca10056\template.*'
+    if GetDepend('SOC_NRF52840') == True:
+        source = cwd + r'\templete_project\pca10056\template.*'
+    elif GetDepend('SOC_NRF52832') == True:
+        source = cwd + r'\templete_project\pca10040\template.*'
+
     target = cwd + r'"\..\..\"'
     copy_command = 'copy "' + source + r'" "' + target + r'"'
     print(copy_command)
