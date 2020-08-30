@@ -48,16 +48,15 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
     path += [cwd + '/components/libraries/strerror']
     path += [cwd + '/components/libraries/memobj']
     path += [cwd + '/components/libraries/balloc']
-
-
     path += [cwd + '/components/ble/common']
-
-    path += [cwd + '/components/ble/common']
-
-    path += [cwd + '/components/softdevice/s140/headers']
     path += [cwd + '/components/softdevice/common']
 
-    path += [cwd + '/components/softdevice/s140/headers/nrf52']
+    if GetDepend('SOC_NRF52840') == True:
+        path += [cwd + '/components/softdevice/s140/headers']
+        path += [cwd + '/components/softdevice/s140/headers/nrf52']
+    if GetDepend('SOC_NRF52832') == True:
+        path += [cwd + '/components/softdevice/s132/headers']
+        path += [cwd + '/components/softdevice/s132/headers/nrf52']
 
     path += [cwd + '/integration/nrfx/legacy']
     CPPDEFINES = ['SOFTDEVICE_PRESENT', 'CONFIG_GPIO_AS_PINRESET']
