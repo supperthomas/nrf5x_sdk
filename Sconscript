@@ -25,8 +25,18 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
     ./components/libraries/util/app_util_platform.c
     ./components/libraries/util/app_error.c
     ./components/libraries/strerror/nrf_strerror.c
+    ./components/libraries/atomic_flags/nrf_atflags.c
+    ./components/libraries/atomic/nrf_atomic.c
+    ./components/libraries/sensorsim/sensorsim.c
     ./rtt_adapter/nrf_sdh_ble_rtt.c
-    ./rtt_adapter/ble_app_beacon.c
+    ./rtt_adapter/ble_conn_params_rtt.c
+    
+    ./components/ble/common/ble_srv_common.c
+    ./components/ble/common/ble_conn_state.c
+    ./components/ble/ble_advertising/ble_advertising.c
+    ./components/ble/nrf_ble_gatt/nrf_ble_gatt.c
+    ./components/ble/nrf_ble_qwr/nrf_ble_qwr.c
+    ./components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c
     ''')
     
 
@@ -36,10 +46,13 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
 
     BLE_SERVICE = Split('''
     ''')
+    
+    BLE_PERIPHERAL_SAMPLE = Split('''
+    ''')
+
+    
 
 
-
-    SOFTDEVICE_SRC = SOFTDEVICE  + BLE_SERVICE + BLE_ADVERTISING
 
     path = [cwd + '/components/libraries/util']
     path += [cwd + '/components/libraries/experimental_section_vars']
@@ -48,7 +61,17 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
     path += [cwd + '/components/libraries/strerror']
     path += [cwd + '/components/libraries/memobj']
     path += [cwd + '/components/libraries/balloc']
+    path += [cwd + '/components/libraries/atomic']
+    path += [cwd + '/components/libraries/atomic_flags']
+    path += [cwd + '/components/libraries/sensorsim']
+
+
+    path += [cwd + '/components/ble/ble_link_ctx_manager']
     path += [cwd + '/components/ble/common']
+    path += [cwd + '/components/ble/ble_advertising']
+    path += [cwd + '/components/ble/nrf_ble_gatt']
+    path += [cwd + '/components/ble/nrf_ble_qwr']
+    path += [cwd + '/components/ble/ble_services/ble_lbs']
     path += [cwd + '/components/softdevice/common']
 
     if GetDepend('SOC_NRF52840') == True:
@@ -60,6 +83,40 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
 
     path += [cwd + '/integration/nrfx/legacy']
     CPPDEFINES = ['SOFTDEVICE_PRESENT', 'CONFIG_GPIO_AS_PINRESET']
+    
+    if GetDepend('SD_BLE_APP_BEACON') == True:
+        BLE_PERIPHERAL_SAMPLE += Split('''
+        ./rtt_adapter/ble_app_beacon.c
+        ''')
+    if GetDepend('SD_BLE_APP_BLINKY') == True:
+        BLE_PERIPHERAL_SAMPLE += Split('''
+        ./rtt_adapter/ble_app_blinky.c
+        ''')
+        BLE_SERVICE += Split('''
+        ./components/ble/ble_services/ble_lbs/ble_lbs.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_lbs']
+
+    if GetDepend('SD_BLE_APP_UART') == True:
+        BLE_PERIPHERAL_SAMPLE += Split('''
+        ./rtt_adapter/ble_app_uart.c
+        ''')
+        BLE_SERVICE += Split('''
+        ./components/ble/ble_services/ble_nus/ble_nus.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_nus']
+
+    if GetDepend('SD_BLE_APP_HRS') == True:
+        BLE_PERIPHERAL_SAMPLE += Split('''
+        ./rtt_adapter/ble_app_hrs.c
+        ''')
+        BLE_SERVICE += Split('''
+        ./components/ble/ble_services/ble_hrs/ble_hrs.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_hrs']
+
+
+    SOFTDEVICE_SRC = SOFTDEVICE  + BLE_SERVICE + BLE_ADVERTISING + BLE_PERIPHERAL_SAMPLE
     group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
 else:
     SOFTDEVICE_SRC = Split('''

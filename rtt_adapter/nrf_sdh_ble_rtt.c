@@ -321,4 +321,9 @@ NRF_SDH_STACK_OBSERVER(m_nrf_sdh_ble_evts_poll, NRF_SDH_BLE_STACK_OBSERVER_PRIO)
     .p_context = NULL,
 };
 
+void app_error_handler(ret_code_t error_code, uint32_t line_num, const uint8_t * p_file_name)
+{
+    rt_kprintf("\r\n (%s, %d):error_code:%x", p_file_name, line_num,error_code);
+}
+
 #endif // NRF_MODULE_ENABLED(NRF_SDH_BLE)
