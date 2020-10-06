@@ -10,6 +10,7 @@
  */
 
 #include <rtthread.h>
+#include <rtdevice.h>
 
 #include "sdk_config.h"
 #include "nordic_common.h"
@@ -27,13 +28,12 @@
 #include "nrf_ble_qwr.h"
 #include "ble_conn_params.h"
 
-
 #define APP_BLE_CONN_CFG_TAG            1                                  /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
-#define CONNECTED_LED                   BSP_BOARD_LED_1                         /**< Is on when device has connected. */
-#define LEDBUTTON_LED                   BSP_BOARD_LED_2                         /**< LED to be toggled with the help of the LED Button Service. */
-#define LEDBUTTON_BUTTON                BSP_BUTTON_0                            /**< Button that will trigger the notification event with the LED Button Service */
+#define ADVERTISING_LED                 BLE_APP_BLINKY_ADV_LED                 /**< Is on when device is advertising. */
+#define CONNECTED_LED                   BLE_APP_BLINKY_CON_LED                 /**< Is on when device has connected. */
+#define LEDBUTTON_LED                   BLE_APP_BLINKY_TOG_LED                 /**< LED to be toggled with the help of the LED Button Service. */
+#define LEDBUTTON_BUTTON                BLE_APP_BLINKY_TRI_BUTTON              /**< Button that will trigger the notification event with the LED Button Service */
 
 #define DEVICE_NAME                     "Nordic_Blinky"                         /**< Name of device. Will be included in the advertising data. */
 
@@ -73,6 +73,61 @@ static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;                   
 static uint8_t m_enc_advdata[BLE_GAP_ADV_SET_DATA_SIZE_MAX];                    /**< Buffer for storing an encoded advertising set. */
 static uint8_t m_enc_scan_response_data[BLE_GAP_ADV_SET_DATA_SIZE_MAX];         /**< Buffer for storing an encoded scan data. */
 static void advertising_start(void);
+
+/**@brief Function for the LEDs initialization.
+ *
+ * @details Initializes all LEDs used by the application.
+ */
+static void leds_init(void)
+{
+    rt_pin_mode(ADVERTISING_LED, PIN_MODE_OUTPUT);
+    rt_pin_mode(CONNECTED_LED, PIN_MODE_OUTPUT);
+    rt_pin_mode(LEDBUTTON_LED, PIN_MODE_OUTPUT);
+    
+    /*led off*/
+    rt_pin_write(ADVERTISING_LED, PIN_HIGH);
+    rt_pin_write(CONNECTED_LED, PIN_HIGH);
+    rt_pin_write(LEDBUTTON_LED, PIN_HIGH);
+}
+
+/**@brief Function for handling events from the button handler module.
+ *
+ * @param[in] pin_no        The pin that the event applies to.
+ * @param[in] button_action The button action (press/release).
+ */
+static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+{
+    ret_code_t err_code;
+    uint8_t button_status;
+    
+    button_status = rt_pin_read(LEDBUTTON_BUTTON);
+    
+    NRF_LOG_INFO("Send button state change.");
+    err_code = ble_lbs_on_button_change(m_conn_handle, &m_lbs, button_status?0:1);
+    if (err_code != NRF_SUCCESS &&
+                err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+                err_code != NRF_ERROR_INVALID_STATE &&
+                err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+    {
+        APP_ERROR_CHECK(err_code);
+    }
+ 
+}
+
+/**@brief Function for initializing the button handler module.
+ */
+static void buttons_init(void)
+{
+    rt_err_t err_code;
+    
+    /*illustrate last parameter.
+    true: hi_accuracy(IN_EVENT),
+    false: lo_accuracy(PORT_EVENT)
+    */
+    err_code =  rt_pin_attach_irq(LEDBUTTON_BUTTON, PIN_IRQ_MODE_RISING_FALLING,
+                                    button_event_handler, (void*) false); 
+}
+
 /**@brief Function for handling BLE events.
  *
  * @param[in]   p_ble_evt   Bluetooth stack event.
@@ -86,21 +141,21 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     {
         case BLE_GAP_EVT_CONNECTED:
             NRF_LOG_INFO("Connected");
-            //bsp_board_led_on(CONNECTED_LED);
-          //  bsp_board_led_off(ADVERTISING_LED);
+            rt_pin_write(CONNECTED_LED, PIN_LOW);//led on
+            rt_pin_write(ADVERTISING_LED, PIN_HIGH);//led off
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
-           // err_code = app_button_enable();
-            //APP_ERROR_CHECK(err_code);
+            err_code = rt_pin_irq_enable(LEDBUTTON_BUTTON, PIN_IRQ_ENABLE);
+            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected");
-            //bsp_board_led_off(CONNECTED_LED);
-           // m_conn_handle = BLE_CONN_HANDLE_INVALID;
-          //  err_code = app_button_disable();
-          //  APP_ERROR_CHECK(err_code);
+            rt_pin_write(CONNECTED_LED, PIN_HIGH);//led off
+            m_conn_handle = BLE_CONN_HANDLE_INVALID;
+            err_code = rt_pin_irq_enable(LEDBUTTON_BUTTON, PIN_IRQ_DISABLE);
+            APP_ERROR_CHECK(err_code);
             advertising_start();
             break;
 
@@ -240,6 +295,9 @@ static void advertising_start(void)
 
     err_code = sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
     APP_ERROR_CHECK(err_code);
+    
+    //LED on
+    rt_pin_write(ADVERTISING_LED, PIN_LOW);
 }
 /**@brief Function for the GAP initialization.
  *
@@ -282,12 +340,12 @@ static void led_write_handler(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t l
 {
     if (led_state)
     {
-        //bsp_board_led_on(LEDBUTTON_LED);
+        rt_pin_write(LEDBUTTON_LED, PIN_LOW);
         NRF_LOG_INFO("Received LED ON!");
     }
     else
     {
-        //bsp_board_led_off(LEDBUTTON_LED);
+        rt_pin_write(LEDBUTTON_LED, PIN_HIGH);
         NRF_LOG_INFO("Received LED OFF!");
     }
 }
@@ -375,6 +433,8 @@ static void conn_params_init(void)
 }
 static int ble_app_softdevice(void)
 {
+    leds_init();
+    buttons_init();
     ble_stack_init();
     gap_params_init();
     gatt_init();
@@ -396,4 +456,4 @@ static rt_thread_t tid1 = RT_NULL;
         rt_thread_startup(tid1);
     return RT_EOK;
 }
-MSH_CMD_EXPORT(ble_app_blinky, ble beacon);
+MSH_CMD_EXPORT(ble_app_blinky, ble app blinky);
