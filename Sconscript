@@ -114,6 +114,14 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
         ./components/ble/ble_services/ble_hrs/ble_hrs.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_hrs']
+        BLE_SERVICE += Split('''
+        ./components/ble/ble_services/ble_dis/ble_dis.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_dis']
+        BLE_SERVICE += Split('''
+        ./components/ble/ble_services/ble_bas/ble_bas.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_bas']
 
 
     SOFTDEVICE_SRC = SOFTDEVICE  + BLE_SERVICE + BLE_ADVERTISING + BLE_PERIPHERAL_SAMPLE

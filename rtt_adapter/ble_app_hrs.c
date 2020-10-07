@@ -29,7 +29,9 @@
 
 #include "sensorsim.h"
 #include "ble_advertising.h"
+#include "ble_bas.h"
 #include "ble_hrs.h"
+#include "ble_dis.h"
 
 
 #define DEVICE_NAME                         "Nordic_HRM"                            /**< Name of device. Will be included in the advertising data. */
@@ -82,7 +84,7 @@
 
 
 BLE_HRS_DEF(m_hrs);                                                 /**< Heart rate service instance. */
-//BLE_BAS_DEF(m_bas);                                                 /**< Structure used to identify the battery service. */
+BLE_BAS_DEF(m_bas);                                                 /**< Structure used to identify the battery service. */
 NRF_BLE_GATT_DEF(m_gatt);                                           /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                 /**< Advertising module instance. */
@@ -359,8 +361,8 @@ static void services_init(void)
 {
     ret_code_t         err_code;
     ble_hrs_init_t     hrs_init;
-//    ble_bas_init_t     bas_init;
-//    ble_dis_init_t     dis_init;
+    ble_bas_init_t     bas_init;
+    ble_dis_init_t     dis_init;
     nrf_ble_qwr_init_t qwr_init = {0};
     uint8_t            body_sensor_location;
 
@@ -386,31 +388,31 @@ static void services_init(void)
     err_code = ble_hrs_init(&m_hrs, &hrs_init);
     APP_ERROR_CHECK(err_code);
 
-//    // Initialize Battery Service.
-//    memset(&bas_init, 0, sizeof(bas_init));
+    // Initialize Battery Service.
+    memset(&bas_init, 0, sizeof(bas_init));
 
-//    bas_init.evt_handler          = NULL;
-//    bas_init.support_notification = true;
-//    bas_init.p_report_ref         = NULL;
-//    bas_init.initial_batt_level   = 100;
+    bas_init.evt_handler          = NULL;
+    bas_init.support_notification = true;
+    bas_init.p_report_ref         = NULL;
+    bas_init.initial_batt_level   = 100;
 
-//    // Here the sec level for the Battery Service can be changed/increased.
-//    bas_init.bl_rd_sec        = SEC_OPEN;
-//    bas_init.bl_cccd_wr_sec   = SEC_OPEN;
-//    bas_init.bl_report_rd_sec = SEC_OPEN;
+    // Here the sec level for the Battery Service can be changed/increased.
+    bas_init.bl_rd_sec        = SEC_OPEN;
+    bas_init.bl_cccd_wr_sec   = SEC_OPEN;
+    bas_init.bl_report_rd_sec = SEC_OPEN;
 
-//    err_code = ble_bas_init(&m_bas, &bas_init);
-//    APP_ERROR_CHECK(err_code);
+    err_code = ble_bas_init(&m_bas, &bas_init);
+    APP_ERROR_CHECK(err_code);
 
-//    // Initialize Device Information Service.
-//    memset(&dis_init, 0, sizeof(dis_init));
+    // Initialize Device Information Service.
+    memset(&dis_init, 0, sizeof(dis_init));
 
-//    ble_srv_ascii_to_utf8(&dis_init.manufact_name_str, (char *)MANUFACTURER_NAME);
+    ble_srv_ascii_to_utf8(&dis_init.manufact_name_str, (char *)MANUFACTURER_NAME);
 
-//    dis_init.dis_char_rd_sec = SEC_OPEN;
+    dis_init.dis_char_rd_sec = SEC_OPEN;
 
-//    err_code = ble_dis_init(&dis_init);
-//    APP_ERROR_CHECK(err_code);
+    err_code = ble_dis_init(&dis_init);
+    APP_ERROR_CHECK(err_code);
 }
 /**@brief Function for handling a Connection Parameters error.
  *
@@ -463,7 +465,7 @@ static void conn_params_init(void)
     err_code = ble_conn_params_init(&cp_init);
     APP_ERROR_CHECK(err_code);
 }
-static int ble_app_softdevice(void)
+static void ble_app_softdevice(void *param)
 {
     ble_stack_init();
     gap_params_init();
@@ -474,16 +476,27 @@ static int ble_app_softdevice(void)
     rt_kprintf("Blinky example started.\r\n");
     advertising_start();
 }
+
+static void timeout(void *param)
+{
+    static int i = 0;
+    i++;
+    ble_bas_battery_level_update(&m_bas, i % (MAX_BATTERY_LEVEL - MIN_BATTERY_LEVEL + 1) + MIN_BATTERY_LEVEL, BLE_CONN_HANDLE_ALL);
+    ble_hrs_heart_rate_measurement_send(&m_hrs, i % (MAX_HEART_RATE - MIN_HEART_RATE + 1) + MIN_HEART_RATE);
+}
+
 int ble_app_hrs(void)
 {
-static rt_thread_t tid1 = RT_NULL;
-
-   tid1 = rt_thread_create("softdevice",
+    static rt_thread_t tid1 = RT_NULL;
+    tid1 = rt_thread_create("softdevice",
                         ble_app_softdevice, RT_NULL,
                         4096,
                         22, 5);
-   if (tid1 != RT_NULL)
+    if (tid1 != RT_NULL)
         rt_thread_startup(tid1);
+    rt_timer_t update = rt_timer_create("update", timeout, RT_NULL, rt_tick_from_millisecond(1000), RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
+    if (update != RT_NULL)
+        rt_timer_start(update);
     return RT_EOK;
 }
 MSH_CMD_EXPORT(ble_app_hrs, ble beacon);
