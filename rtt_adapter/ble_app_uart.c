@@ -27,7 +27,7 @@
 #include "nrf_ble_qwr.h"
 #include "ble_conn_params.h"
 #include "ble_advertising.h"
-
+#include "ipc/ringbuffer.h"
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
@@ -55,10 +55,10 @@
 
 
 
-#define NRF_LOG_ERROR(...)                     rt_kprintf(__VA_ARGS__)
-#define NRF_LOG_WARNING(...)                   rt_kprintf( __VA_ARGS__)
-#define NRF_LOG_INFO(...)                      rt_kprintf( __VA_ARGS__)
-#define NRF_LOG_DEBUG(...)                     rt_kprintf( __VA_ARGS__)
+//#define NRF_LOG_ERROR(...)                     rt_kprintf(__VA_ARGS__)
+//#define NRF_LOG_WARNING(...)                   rt_kprintf( __VA_ARGS__)
+//#define NRF_LOG_INFO(...)                      rt_kprintf( __VA_ARGS__)
+//#define NRF_LOG_DEBUG(...)                     rt_kprintf( __VA_ARGS__)
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT);                                   /**< BLE NUS service instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
@@ -273,6 +273,18 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
 }
+
+RT_WEAK void uart_software_intterrupt(void)
+{
+    return ;
+};
+
+RT_WEAK struct rt_ringbuffer *uart_ringbuffer_get(void)
+{
+    return NULL;
+}
+
+static struct rt_ringbuffer *p_ringbuffer_handler = NULL;
 /**@brief Function for handling the data from the Nordic UART Service.
  *
  * @details This function will process the data received from the Nordic UART BLE Service and send
@@ -283,30 +295,30 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 /**@snippet [Handling the data received over BLE] */
 static void nus_data_handler(ble_nus_evt_t * p_evt)
 {
-
+    p_ringbuffer_handler = uart_ringbuffer_get();
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
         uint32_t err_code;
 
-        NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on UART.");
-        NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-
-        for (uint32_t i = 0; i < p_evt->params.rx_data.length; i++)
-        {
-            do
+        rt_kprintf("Received data from BLE NUS. Writing data on UART.\r\n");
+        for(int i = 0; i < p_evt->params.rx_data.length; i++)
             {
-              //  err_code = app_uart_put(p_evt->params.rx_data.p_data[i]);
-                if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_BUSY))
+            rt_kprintf("%c", p_evt->params.rx_data.p_data[i]);
+            if (NULL != p_ringbuffer_handler)
                 {
-                    NRF_LOG_ERROR("Failed receiving NUS message. Error 0x%x. ", err_code);
-                    APP_ERROR_CHECK(err_code);
+                rt_ringbuffer_putchar(p_ringbuffer_handler, p_evt->params.rx_data.p_data[i]);
+                uart_software_intterrupt();
                 }
-            } while (err_code == NRF_ERROR_BUSY);
         }
-        if (p_evt->params.rx_data.p_data[p_evt->params.rx_data.length - 1] == '\r')
+        rt_kprintf("\r\n");
+        
+        if (NULL != p_ringbuffer_handler)
         {
-          //  while (app_uart_put('\n') == NRF_ERROR_BUSY);
+            rt_ringbuffer_putchar(p_ringbuffer_handler, '\n');
+            uart_software_intterrupt();
         }
+        
+        ble_nus_data_send(&m_nus, (uint8_t *)p_evt->params.rx_data.p_data, &p_evt->params.rx_data.length, m_conn_handle);
     }
 
 }
@@ -385,7 +397,7 @@ static void conn_params_init(void)
     err_code = ble_conn_params_init(&cp_init);
     APP_ERROR_CHECK(err_code);
 }
-static int ble_app_softdevice(void)
+static void ble_app_softdevice(void *param)
 {
     ble_stack_init();
     gap_params_init();
