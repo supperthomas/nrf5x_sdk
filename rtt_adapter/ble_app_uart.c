@@ -10,6 +10,8 @@
  */
 
 #include <rtthread.h>
+#include <rtdevice.h>
+#include <drivers/serial.h>
 
 #include "sdk_config.h"
 #include "nordic_common.h"
@@ -72,6 +74,10 @@ static ble_uuid_t m_adv_uuids[]          =                                      
     {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
 };
 
+static struct rt_ringbuffer ringbuffer_handler;
+static rt_uint8_t ringbuffer[1024] = {0};
+static rt_device_t serial;
+#define UART_NAME       "uart0"      /* 串口设备名称 */
 
 /**@brief Function for handling BLE events.
  *
@@ -274,17 +280,21 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
-RT_WEAK void uart_software_intterrupt(void)
+static void uart_software_intterrupt(void)
 {
-    return ;
+    rt_hw_serial_isr((struct rt_serial_device *)serial, RT_SERIAL_EVENT_RX_IND);
 };
 
-RT_WEAK struct rt_ringbuffer *uart_ringbuffer_get(void)
+int uart_getc_hook(rt_uint8_t *ch)
 {
-    return NULL;
+    if (0 == rt_ringbuffer_getchar(&ringbuffer_handler, ch))
+    {
+        return -1;
+    }
+    return 0;
 }
 
-static struct rt_ringbuffer *p_ringbuffer_handler = NULL;
+
 /**@brief Function for handling the data from the Nordic UART Service.
  *
  * @details This function will process the data received from the Nordic UART BLE Service and send
@@ -295,33 +305,27 @@ static struct rt_ringbuffer *p_ringbuffer_handler = NULL;
 /**@snippet [Handling the data received over BLE] */
 static void nus_data_handler(ble_nus_evt_t * p_evt)
 {
-    p_ringbuffer_handler = uart_ringbuffer_get();
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
         uint32_t err_code;
 
         rt_kprintf("Received data from BLE NUS. Writing data on UART.\r\n");
         for(int i = 0; i < p_evt->params.rx_data.length; i++)
-            {
-            rt_kprintf("%c", p_evt->params.rx_data.p_data[i]);
-            if (NULL != p_ringbuffer_handler)
-                {
-                rt_ringbuffer_putchar(p_ringbuffer_handler, p_evt->params.rx_data.p_data[i]);
-                uart_software_intterrupt();
-                }
-        }
-        rt_kprintf("\r\n");
-        
-        if (NULL != p_ringbuffer_handler)
         {
-            rt_ringbuffer_putchar(p_ringbuffer_handler, '\n');
+            rt_kprintf("%c", p_evt->params.rx_data.p_data[i]);
+            rt_ringbuffer_putchar(&ringbuffer_handler, p_evt->params.rx_data.p_data[i]);
             uart_software_intterrupt();
         }
+        rt_kprintf("\r\n");
+        rt_ringbuffer_putchar(&ringbuffer_handler, '\n');
+        uart_software_intterrupt();
         
         ble_nus_data_send(&m_nus, (uint8_t *)p_evt->params.rx_data.p_data, &p_evt->params.rx_data.length, m_conn_handle);
     }
 
 }
+
+
 /**@snippet [Handling the data received over BLE] */
 
 /**@brief Function for initializing services that will be used by the application.
@@ -410,13 +414,21 @@ static void ble_app_softdevice(void *param)
 }
 int ble_app_uart(void)
 {
-static rt_thread_t tid1 = RT_NULL;
+    rt_ringbuffer_init(&ringbuffer_handler, ringbuffer, sizeof(ringbuffer));
+    serial = rt_device_find(UART_NAME);
+    if (!serial)
+    {
+        rt_kprintf("find %s failed!\n", UART_NAME);
+        return -RT_ERROR;
+    }
+    
+    static rt_thread_t tid1 = RT_NULL;
 
-   tid1 = rt_thread_create("softdevice",
+    tid1 = rt_thread_create("softdevice",
                         ble_app_softdevice, RT_NULL,
                         4096,
                         22, 5);
-   if (tid1 != RT_NULL)
+    if (tid1 != RT_NULL)
         rt_thread_startup(tid1);
     return RT_EOK;
 }
