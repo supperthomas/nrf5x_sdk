@@ -79,6 +79,10 @@ static rt_uint8_t ringbuffer[1024] = {0};
 static rt_device_t serial;
 #define UART_NAME       "uart0"      /* 串口设备名称 */
 
+
+static struct rt_ringbuffer ringbuffer_putc_handler;
+static rt_uint8_t ringbuffer_putc[1024] = {0};
+
 /**@brief Function for handling BLE events.
  *
  * @param[in]   p_ble_evt   Bluetooth stack event.
@@ -307,7 +311,7 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
 {
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
-        uint32_t err_code;
+//        uint32_t err_code;
 
         rt_kprintf("Received data from BLE NUS. Writing data on UART.\r\n");
         for(int i = 0; i < p_evt->params.rx_data.length; i++)
@@ -320,7 +324,7 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
         rt_ringbuffer_putchar(&ringbuffer_handler, '\n');
         uart_software_intterrupt();
         
-        ble_nus_data_send(&m_nus, (uint8_t *)p_evt->params.rx_data.p_data, &p_evt->params.rx_data.length, m_conn_handle);
+        // ble_nus_data_send(&m_nus, (uint8_t *)p_evt->params.rx_data.p_data, &p_evt->params.rx_data.length, m_conn_handle);
     }
 
 }
@@ -412,9 +416,66 @@ static void ble_app_softdevice(void *param)
     rt_kprintf("Blinky example started.\r\n");
     advertising_start();
 }
+
+int uart_putc_hook(rt_uint8_t *ch)
+{
+    rt_ringbuffer_putchar(&ringbuffer_putc_handler, *ch);
+    return 0;
+}
+
+static void uart_task(void *param)
+{
+    uint16_t data_len = 0;
+    uint16_t onece_send_data_len = 50;
+
+    // 每隔1秒钟， 查询当前putc ringbuffer是否有数据需要发送
+    while (1)
+    {
+        data_len = rt_ringbuffer_data_len(&ringbuffer_putc_handler);
+        if (data_len > 0)
+        {
+            uint8_t *pdata = (uint8_t *)rt_malloc(data_len);
+            if(pdata == NULL)
+            {
+                rt_kprintf("malloc data failed, malloc len is %d\r\n", data_len);
+            }
+            else
+            {
+                // 内存分配成功
+                rt_ringbuffer_get(&ringbuffer_putc_handler, pdata, data_len);
+
+                // 将要发送的数据， 分次发送，每次发送onece_send_data_len数据
+                uint8_t count = 0;
+                uint16_t remainint_data = 0;
+                count = data_len / onece_send_data_len;
+                remainint_data = data_len % onece_send_data_len;
+
+                int i = 0;
+                for (i = 0; i < count; i++)
+                {
+                    ble_nus_data_send(&m_nus, pdata + i * onece_send_data_len, &onece_send_data_len, m_conn_handle);
+                    rt_thread_mdelay(200);
+                }
+                ble_nus_data_send(&m_nus, pdata + i * onece_send_data_len, &remainint_data, m_conn_handle);
+                rt_thread_mdelay(200);
+
+                // 释放内存
+                if (pdata != NULL)
+                {
+                    rt_free(pdata);
+                    pdata = NULL;
+                }
+            }
+        }
+        rt_thread_mdelay(1000);
+    }
+    
+}
+
 int ble_app_uart(void)
 {
     rt_ringbuffer_init(&ringbuffer_handler, ringbuffer, sizeof(ringbuffer));
+    rt_ringbuffer_init(&ringbuffer_putc_handler, ringbuffer_putc, sizeof(ringbuffer_putc));
     serial = rt_device_find(UART_NAME);
     if (!serial)
     {
@@ -430,6 +491,15 @@ int ble_app_uart(void)
                         22, 5);
     if (tid1 != RT_NULL)
         rt_thread_startup(tid1);
+
+    tid1 = rt_thread_create("serial_task",
+                        uart_task, RT_NULL,
+                        1024,
+                        22, 5);
+    if (tid1 != RT_NULL)
+    {
+        rt_thread_startup(tid1);
+    }
     return RT_EOK;
 }
 MSH_CMD_EXPORT(ble_app_uart, ble app uart);
