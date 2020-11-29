@@ -364,7 +364,7 @@ void measure_battery_init(void)
                                                 .channel_num = ADC_CHANNEL_NUM};
     
     //find adc deveice,and add channel data.
-    adc_dev = (rt_adc_device_t)rt_device_find("SAADC");
+    adc_dev = (rt_adc_device_t)rt_device_find(ADC_NAME);
     adc_dev->parent.user_data = &channel_config;
     
     //config adc channel,enable channel.
@@ -408,8 +408,8 @@ static void measure_battery_level_timerout(void *param)
     // res += 10;
     // if(res > 4096) res = 3072;
     // result = res;
-    
-    //(V(P) ¨C V(N)) = (RESULT * 3.6) / 4096
+   
+    //(V(P) - V(N)) = (RESULT * 3.6) / 4096
     voltage = (result * 3.6) / 4096;
         
     //calculate battery level
