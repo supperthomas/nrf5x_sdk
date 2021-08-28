@@ -11,67 +11,88 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
         source = cwd + r'\templete_project\pca10056\template.*'
     elif GetDepend('SOC_NRF52832') == True:
         source = cwd + r'\templete_project\pca10040\template.*'
+    elif GetDepend('SOC_NRF52833') == True:
+        source = cwd + r'\templete_project\pca10100\template.*'
 
     target = cwd + r'"\..\..\"'
     copy_command = 'copy "' + source + r'" "' + target + r'"'
     print(copy_command)
     os.system(copy_command)
-    SOFTDEVICE = Split('''
-    ./components/softdevice/common/nrf_sdh.c
 
-    ./integration/nrfx/legacy/nrf_drv_clock.c
-    ./components/libraries/util/app_error_weak.c
-    ./components/libraries/experimental_section_vars/nrf_section_iter.c
-    ./components/libraries/util/app_util_platform.c
-    ./components/libraries/util/app_error.c
-    ./components/libraries/strerror/nrf_strerror.c
-    ./components/libraries/atomic_flags/nrf_atflags.c
-    ./components/libraries/atomic/nrf_atomic.c
-    ./components/libraries/sensorsim/sensorsim.c
-    ./rtt_adapter/nrf_sdh_ble_rtt.c
-    ./rtt_adapter/ble_conn_params_rtt.c
-    
+    path = []
+    CPPDEFINES = []
+
+    NRF_BLE_SRC = Split('''
+    ./components/ble/ble_db_discovery/ble_db_discovery.c
+    ./components/ble/common/ble_advdata.c
     ./components/ble/common/ble_srv_common.c
     ./components/ble/common/ble_conn_state.c
-    ./components/ble/ble_advertising/ble_advertising.c
     ./components/ble/nrf_ble_gatt/nrf_ble_gatt.c
-    ./components/ble/nrf_ble_qwr/nrf_ble_qwr.c
-    ./components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c
-    ''')
-    
+    ./components/ble/nrf_ble_gq/nrf_ble_gq.c
+    ./components/ble/nrf_ble_scan/nrf_ble_scan.c
 
-    BLE_ADVERTISING = Split('''
-    ./components/ble/common/ble_advdata.c
+    ./rtt_adapter/ble_conn_params_rtt.c
     ''')
 
-    BLE_SERVICE = Split('''
+    path += [cwd + '/components/ble/ble_db_discovery']
+    path += [cwd + '/components/ble/common']
+    path += [cwd + '/components/ble/nrf_ble_gatt']
+    path += [cwd + '/components/ble/nrf_ble_gq']
+    path += [cwd + '/components/ble/nrf_ble_scan']
+
+    NRF_SOFTDEVICE_SRC = Split('''
+    ./components/softdevice/common/nrf_sdh.c
+    ./components/softdevice/common/nrf_sdh_ble.c
+    ./components/softdevice/common/nrf_sdh_soc.c
     ''')
-    
-    BLE_PERIPHERAL_SAMPLE = Split('''
+
+    path += [cwd + '/components/softdevice/common']
+
+    NRF_LIBRARIES_SRC = Split('''
+    ./components/libraries/util/app_error.c
+    ./components/libraries/util/app_error_handler_keil.c
+    ./components/libraries/util/app_error_weak.c
+    ./components/libraries/scheduler/app_scheduler.c
+    ./components/libraries/fifo/app_fifo.c
+    ./components/libraries/util/app_util_platform.c
+
+    ./components/libraries/hardfault/hardfault_implementation.c
+
+    ./components/libraries/util/nrf_assert.c
+    ./components/libraries/atomic/nrf_atomic.c
+    ./components/libraries/atomic_fifo/nrf_atfifo.c
+    ./components/libraries/atomic_flags/nrf_atflags.c
+    ./components/libraries/balloc/nrf_balloc.c
+    ./components/libraries/memobj/nrf_memobj.c
+    ./components/libraries/queue/nrf_queue.c
+    ./components/libraries/ringbuf/nrf_ringbuf.c
+    ./components/libraries/experimental_section_vars/nrf_section_iter.c
+    ./components/libraries/sortlist/nrf_sortlist.c
+    ./components/libraries/strerror/nrf_strerror.c
     ''')
 
-    
-
-
-
-    path = [cwd + '/components/libraries/util']
+    path += [cwd + '/components/libraries/util']
+    path += [cwd + '/components/libraries/scheduler']
+    path += [cwd + '/components/libraries/timer']
+    path += [cwd + '/components/libraries/fifo']
+    path += [cwd + '/components/libraries/hardfault']
+    path += [cwd + '/components/libraries/atomic']
+    path += [cwd + '/components/libraries/atomic_fifo']
+    path += [cwd + '/components/libraries/atomic_flags']
+    path += [cwd + '/components/libraries/balloc']
+    path += [cwd + '/components/libraries/memobj']
+    path += [cwd + '/components/libraries/queue']
+    path += [cwd + '/components/libraries/ringbuf']
     path += [cwd + '/components/libraries/experimental_section_vars']
+    path += [cwd + '/components/libraries/sortlist']
+    path += [cwd + '/components/libraries/strerror']
     path += [cwd + '/components/libraries/log']
     path += [cwd + '/components/libraries/log/src']
-    path += [cwd + '/components/libraries/strerror']
-    path += [cwd + '/components/libraries/memobj']
-    path += [cwd + '/components/libraries/balloc']
-    path += [cwd + '/components/libraries/atomic']
-    path += [cwd + '/components/libraries/atomic_flags']
-    path += [cwd + '/components/libraries/sensorsim']
 
+    NRF_NRFX_SRC = Split('''
+    ./integration/nrfx/legacy/nrf_drv_clock.c
+    ''') 
 
-    path += [cwd + '/components/ble/ble_link_ctx_manager']
-    path += [cwd + '/components/ble/common']
-    path += [cwd + '/components/ble/ble_advertising']
-    path += [cwd + '/components/ble/nrf_ble_gatt']
-    path += [cwd + '/components/ble/nrf_ble_qwr']
-    path += [cwd + '/components/ble/ble_services/ble_lbs']
     path += [cwd + '/components/softdevice/common']
 
     if GetDepend('SOC_NRF52840') == True:
@@ -80,64 +101,93 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
     if GetDepend('SOC_NRF52832') == True:
         path += [cwd + '/components/softdevice/s132/headers']
         path += [cwd + '/components/softdevice/s132/headers/nrf52']
+    if GetDepend('SOC_NRF52833') == True:
+        path += [cwd + '/components/softdevice/s140/headers']
+        path += [cwd + '/components/softdevice/s140/headers/nrf52']
 
     path += [cwd + '/integration/nrfx/legacy']
     CPPDEFINES = ['SOFTDEVICE_PRESENT', 'CONFIG_GPIO_AS_PINRESET']
     
+    NRF_BLE_SERVICE_SRC = []
+
+    if GetDepend('SD_BLE_APP_UART_C') == True:
+        NRF_BLE_SERVICE_SRC += Split('''
+        ./rtt_adapter/ble_app_uart_c.c
+        ''')
+        NRF_BLE_SERVICE_SRC += Split('''
+        ./components/ble/ble_services/ble_nus_c/ble_nus_c.c
+        ''')
+        path += [cwd + '/components/ble/ble_services/ble_nus_c']
+
     if GetDepend('SD_BLE_APP_BEACON') == True:
-        BLE_PERIPHERAL_SAMPLE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./rtt_adapter/ble_app_beacon.c
         ''')
     if GetDepend('SD_BLE_APP_BLINKY') == True:
-        BLE_PERIPHERAL_SAMPLE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./rtt_adapter/ble_app_blinky.c
         ''')
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_lbs/ble_lbs.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_lbs']
 
     if GetDepend('SD_BLE_APP_UART') == True:
-        BLE_PERIPHERAL_SAMPLE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./rtt_adapter/ble_app_uart.c
         ''')
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_nus/ble_nus.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_nus']
 
     if GetDepend('SD_BLE_APP_HRS') == True:
-        BLE_PERIPHERAL_SAMPLE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./rtt_adapter/ble_app_hrs.c
         ''')
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_hrs/ble_hrs.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_hrs']
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_dis/ble_dis.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_dis']
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_bas/ble_bas.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_bas']
-        
+
     if GetDepend('SD_BLE_APP_BAS') == True:
-        BLE_PERIPHERAL_SAMPLE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./rtt_adapter/ble_app_bas.c
         ''')
-        BLE_SERVICE += Split('''
+        NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_bas/ble_bas.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_bas']
         
-    SOFTDEVICE_SRC = SOFTDEVICE  + BLE_SERVICE + BLE_ADVERTISING + BLE_PERIPHERAL_SAMPLE
-    group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+    group = DefineGroup('nRF_NRFX', NRF_NRFX_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+    group = DefineGroup('nRF_BLE', NRF_BLE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+    group = DefineGroup('nRF_BLE_Services', NRF_BLE_SERVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+    group = DefineGroup('nRF_SoftDevice', NRF_SOFTDEVICE_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+    group = DefineGroup('nRF_Libraries', NRF_LIBRARIES_SRC, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
 else:
-    SOFTDEVICE_SRC = Split('''
+    NRF_NRFX_SRC = Split('''
     ''')
-    group = DefineGroup('SOFTDEVICE', SOFTDEVICE_SRC, depend = [''])
+    NRF_BLE_SRC = Split('''
+    ''')
+    NRF_BLE_SERVICE_SRC = Split('''
+    ''')
+    NRF_SOFTDEVICE_SRC = Split('''
+    ''')
+    NRF_LIBRARIES_SRC = Split('''
+    ''')
+    group = DefineGroup('nRF_NRFX', NRF_NRFX_SRC, depend = [''])
+    group = DefineGroup('nRF_BLE', NRF_BLE_SRC, depend = [''])
+    group = DefineGroup('nRF_BLE_Services', NRF_BLE_SERVICE_SRC, depend = [''])
+    group = DefineGroup('nRF_SoftDevice', NRF_SOFTDEVICE_SRC, depend = [''])
+    group = DefineGroup('nRF_Libraries', NRF_LIBRARIES_SRC, depend = [''])
 
 
 
