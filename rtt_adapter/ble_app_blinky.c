@@ -19,7 +19,6 @@
 #include "nrf_sdh_ble.h"
 #include "ble_advdata.h"
 #include "app_error.h"
-#include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
@@ -95,7 +94,7 @@ static void leds_init(void)
  * @param[in] pin_no        The pin that the event applies to.
  * @param[in] button_action The button action (press/release).
  */
-static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+static void button_event_handler(void *args)
 {
     ret_code_t err_code;
     uint8_t button_status;
@@ -117,14 +116,12 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
 /**@brief Function for initializing the button handler module.
  */
 static void buttons_init(void)
-{
-    rt_err_t err_code;
-    
+{    
     /*illustrate last parameter.
     true: hi_accuracy(IN_EVENT),
     false: lo_accuracy(PORT_EVENT)
     */
-    err_code =  rt_pin_attach_irq(LEDBUTTON_BUTTON, PIN_IRQ_MODE_RISING_FALLING,
+    rt_pin_attach_irq(LEDBUTTON_BUTTON, PIN_IRQ_MODE_RISING_FALLING,
                                     button_event_handler, (void*) false); 
 }
 
@@ -431,7 +428,7 @@ static void conn_params_init(void)
     err_code = ble_conn_params_init(&cp_init);
     APP_ERROR_CHECK(err_code);
 }
-static int ble_app_softdevice(void)
+static void ble_app_softdevice(void *parameter)
 {
     leds_init();
     buttons_init();

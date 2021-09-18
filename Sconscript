@@ -129,8 +129,10 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
         ''')
         NRF_BLE_SERVICE_SRC += Split('''
         ./components/ble/ble_services/ble_lbs/ble_lbs.c
+        ./components/ble/nrf_ble_qwr/nrf_ble_qwr.c
         ''')
         path += [cwd + '/components/ble/ble_services/ble_lbs']
+        path += [cwd + '/components/ble/nrf_ble_qwr']
 
     if GetDepend('SD_BLE_APP_UART') == True:
         NRF_BLE_SERVICE_SRC += Split('''
