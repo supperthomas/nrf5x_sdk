@@ -94,10 +94,9 @@ if GetDepend(['BSP_USING_SOFTDEVICE']):
     path += [cwd + '/components/libraries/log/src']
     path += [cwd + '/components/libraries/sensorsim']
 
-    
-    # NRF_NRFX_SRC = Split('''
     # ./integration/nrfx/legacy/nrf_drv_clock.c
-    # ''') 
+    NRF_NRFX_SRC = Split('''
+    ''') 
 
     path += [cwd + '/components/softdevice/common']
 
