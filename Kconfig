@@ -2,7 +2,7 @@
 # Kconfig file for package nrf5x_sdk
 
 
-
+  
 menuconfig PKG_USING_NRF5X_SDK
     bool "nrf5x_sdk: the sdk of nordic"
     default n
