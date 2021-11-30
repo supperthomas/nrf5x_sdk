@@ -7,6 +7,6 @@ jobs:
     steps:
       - name: Hello world action step
         id: hello
-        uses: supperthomas/hello-world-docker-action@v5
+        uses: supperthomas/hello-world-docker-action@v6
         with:
           who-to-greet: 'Mona the Octocat' 
