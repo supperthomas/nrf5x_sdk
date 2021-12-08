@@ -6,7 +6,7 @@ import os
 # get current directory
 cwd = GetCurrentDir()
 
-if GetDepend(['BSP_USING_SOFTDEVICE']):
+if GetDepend(['PKG_USING_NRF5X_SDK']):
     if GetDepend('SOC_NRF52840') == True:
         source = cwd + r'\templete_project\pca10056\template.*'
     elif GetDepend('SOC_NRF52832') == True:
