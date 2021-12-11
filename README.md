@@ -1,5 +1,5 @@
 # rtthread_nordic_sdk
-
+  
 #### 介绍
 基于Nordic  nRF5_SDK_16 的软件包
 
