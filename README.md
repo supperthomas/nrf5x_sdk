@@ -4,7 +4,7 @@
 <p align="center">
 	<a href="https://github.com/supperthomas/nrf5x_sdk/stargazers"><img src="https://img.shields.io/github/stars/supperthomas/nrf5x_sdk?style=flat-square&logo=GitHub"></a>
 	<a href="https://github.com/supperthomas/nrf5x_sdk/network/members"><img src="https://img.shields.io/github/forks/supperthomas/nrf5x_sdk?style=flat-square&logo=GitHub"></a>
-	<a href="https://github.com/supperthomas/nrf5x_sdk/watchers"><img src="https://img.shields.io/github/watchers/supperthomas/nrf5x_sdkt?style=flat-square&logo=GitHub"></a>
+	<a href="https://github.com/supperthomas/nrf5x_sdk/watchers"><img src="https://img.shields.io/github/watchers/supperthomas/nrf5x_sdk?style=flat-square&logo=GitHub"></a>
 	<a href="https://github.com/supperthomas/nrf5x_sdk/issues"><img src="https://img.shields.io/github/issues/supperthomas/nrf5x_sdk.svg?style=flat-square&logo=GitHub"></a>
 </p>
 
