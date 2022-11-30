@@ -15,7 +15,7 @@ on:
       - '**/README_zh.md'
   pull_request:
     branches:
-      - main
+      - master
     paths-ignore:
       - documentation/**
       - '**/README.md'
@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
        legs:
-         - {RTT_BSP: "qemu-vexpress-a9", RTT_TOOL_CHAIN: "sourcery-arm"}
+         - {RTT_BSP: "nrf5x/nrf52840", RTT_TOOL_CHAIN: "sourcery-arm"}
          
     steps:
       - uses: actions/checkout@v3
@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get -qq install gcc-multilib libsdl-dev libncurses5-dev scons
+          sudo apt-get -qq install gcc-multilib libncurses5-dev scons
           sudo python -m pip install --upgrade pip -qq
           pip install requests -qq
           git config --global http.postBuffer 524288000
@@ -72,7 +72,7 @@ jobs:
           du -h --max-depth=1 | sort -nr
           du -h --max-depth=1 bsp | sort -nr
           du -s * | sort -nr
-          sed -i "s/# CONFIG_PKG_USING_NRF5X_SDK is not set/CONFIG_PKG_USING_NRF5X_SDK=y/g" bsp/$RTT_BSP/.config
+          sed -i "s/# CONFIG_BSP_USING_SOFTDEVICE is not set/CONFIG_BSP_USING_SOFTDEVICE=y/g" bsp/$RTT_BSP/.config
           scons --pyconfig-silent -C bsp/$RTT_BSP
           cat bsp/$RTT_BSP/.config
           pushd bsp/$RTT_BSP && pkgs --update && popd
