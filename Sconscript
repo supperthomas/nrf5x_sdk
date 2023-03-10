@@ -21,7 +21,6 @@ if GetDepend(['PKG_USING_NRF5X_SDK']):
 
     path = []
     CPPDEFINES = []
-
     NRF_BLE_SRC = Split('''
     ./components/ble/ble_db_discovery/ble_db_discovery.c
     ./components/ble/common/ble_advdata.c
@@ -34,6 +33,7 @@ if GetDepend(['PKG_USING_NRF5X_SDK']):
     ./components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c
     ./components/ble/ble_advertising/ble_advertising.c
     ./rtt_adapter/ble_conn_params_rtt.c
+    ./integration/nrfx/legacy/nrf_drv_clock.c
     ''')
 
     path += [cwd + '/components/ble/ble_db_discovery']
