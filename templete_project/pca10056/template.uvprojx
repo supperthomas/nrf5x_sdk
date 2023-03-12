@@ -421,7 +421,7 @@
             <NotGenerated>0</NotGenerated>
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
-          <OutputDirectory>.\packages\nrf5x_sdk-latest\components\softdevice\s140\hex\</OutputDirectory>
+          <OutputDirectory>.\packages\nrf5x_sdk-v16.1.0\components\softdevice\s140\hex\</OutputDirectory>
           <OutputName>s140_nrf52_7.0.1_softdevice.hex</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
