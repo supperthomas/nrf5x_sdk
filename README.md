@@ -14,6 +14,9 @@
 基于Nordic  nRF5_SDK_16 的软件包，
 
 目前该软件是基于16.0.0 版本的官方SDK进行移植和方便大家在rtthread的上面尝试nordic官方的softdevice。
+目前仅支持MDK， 
+
+GCC和IAR版本暂时没有经历支持和维护，欢迎PR一起来维护。
 
 
 
