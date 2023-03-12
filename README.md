@@ -9,9 +9,13 @@
 </p>
 
 # Rtthread_nordic_sdk
- 
+
 #### 介绍
-基于Nordic  nRF5_SDK_16 的软件包
+基于Nordic  nRF5_SDK_16 的软件包，
+
+目前该软件是基于16.0.0 版本的官方SDK进行移植和方便大家在rtthread的上面尝试nordic官方的softdevice。
+
+
 
 #### 软件架构
 来源官方SDK
@@ -21,6 +25,30 @@
 1.  进入menuconfig中
 2.  选择on line package
 3.  选择peripheral libraries and drivers
+
+**请注意：**
+
+使用之前请在rtthread工程中找到如下函数，做如下注释修改。才能使用正常softdevice的功能。
+
+```
+rt_hw_interrupt_disable    PROC
+    EXPORT  rt_hw_interrupt_disable
+    ;MRS     r0, PRIMASK
+    ;CPSID   I
+    BX      LR
+    ENDP
+
+;/*
+; * void rt_hw_interrupt_enable(rt_base_t level);
+; */
+rt_hw_interrupt_enable    PROC
+    EXPORT  rt_hw_interrupt_enable
+    ;MSR     PRIMASK, r0
+    BX      LR
+    ENDP
+```
+
+
 
 #### 参与贡献
 
