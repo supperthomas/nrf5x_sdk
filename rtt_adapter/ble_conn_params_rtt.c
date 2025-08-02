@@ -37,6 +37,11 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+#define LOG_LVL LOG_LVL_DBG
+#define LOG_TAG "ble_param"
+#include <ulog.h>
+
 #include "sdk_common.h"
 #if NRF_MODULE_ENABLED(NRF_BLE_CONN_PARAMS)
 #include <stdlib.h>
@@ -57,6 +62,11 @@
 #if (NRF_BLE_CONN_PARAMS_INSTANCE_COUNT < 1)
 #error Invalid NRF_SDH_BLE_PERIPHERAL_LINK_COUNT value. Set it in SDK config (nrf_sdh_ble).
 #endif
+
+/**
+ *rt_mailbox_t conn_update_mb
+ */
+rt_mailbox_t conn_update_mb;
 
 /** @brief Each peripheral link has such an instance associated with it.
  */
@@ -204,8 +214,10 @@ static bool send_update_request(uint16_t conn_handle, ble_gap_conn_params_t * p_
  *
  * @param[in]  p_context  Context identifying which connection this is for.
  */
-static void update_timeout_handler(void * p_context)
+
+static void conn_params_update_delay(void * p_context)
 {
+	LOG_I("Enter the handler");
     uint32_t                     conn_handle = (uint32_t)p_context;
     ble_conn_params_instance_t * p_instance  = instance_get(conn_handle);
 
@@ -215,6 +227,8 @@ static void update_timeout_handler(void * p_context)
         if (p_instance->update_count < m_conn_params_config.max_conn_params_update_count)
         {
             bool update_sent = send_update_request(conn_handle, &p_instance->preferred_conn_params);
+			LOG_I("send_update_request Done.");
+			
             if (update_sent)
             {
                 p_instance->update_count++;
@@ -247,6 +261,11 @@ static void update_timeout_handler(void * p_context)
             }
         }
     }
+}
+
+static void update_timeout_handler(void * p_context)
+{
+	rt_mb_send(conn_update_mb, (rt_ubase_t)p_context);
 }
 
 
@@ -288,17 +307,12 @@ ret_code_t ble_conn_params_init(const ble_conn_params_init_t * p_init)
         p_instance->timer_id = rt_timer_create("softdevice_timer", update_timeout_handler,
                              RT_NULL, 10,
                              RT_TIMER_FLAG_ONE_SHOT);
-        // = &m_timer_data[i];
-
-//        err_code = app_timer_create(&p_instance->timer_id,
-//                            APP_TIMER_MODE_SINGLE_SHOT,
-//                            update_timeout_handler);
+		
         if (err_code != NRF_SUCCESS)
         {
             return NRF_ERROR_INTERNAL;
         }
     }
-    //lint -restore
 
     return NRF_SUCCESS;
 }
@@ -342,10 +356,10 @@ ret_code_t ble_conn_params_stop(void)
  * @param[in]  p_instance   Configuration for the connection.
  */
 static void conn_params_negotiation(uint16_t conn_handle, ble_conn_params_instance_t * p_instance)
-        {
+{
     // Start negotiation if the received connection parameters are not acceptable
     if (!p_instance->params_ok)
-            {
+    {
         ret_code_t err_code;
         uint32_t   timeout_ticks;
 
@@ -361,10 +375,10 @@ static void conn_params_negotiation(uint16_t conn_handle, ble_conn_params_instan
         rt_timer_control(p_instance->timer_id, RT_TIMER_CTRL_SET_TIME, &timeout_ticks);
         err_code = rt_timer_start(p_instance->timer_id);//app_timer_start(p_instance->timer_id, timeout_ticks, (void *)(uint32_t)conn_handle);
         if (err_code != NRF_SUCCESS)
-            {
+        {
             send_error_evt(err_code);
-            }
         }
+    }
     else
     {
         p_instance->update_count = 0;
@@ -572,4 +586,41 @@ ret_code_t ble_conn_params_change_conn_params(uint16_t                conn_handl
 
 NRF_SDH_BLE_OBSERVER(m_ble_observer, BLE_CONN_PARAMS_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 
-#endif //ENABLED
+
+/* part2 入口函数 */
+static void conn_update_thread_entry(void* parameter)
+{
+	void *p_context = RT_NULL;
+	while(1)
+	{
+		/* 接收p_context */
+		if(RT_EOK == rt_mb_recv(conn_update_mb, (rt_ubase_t *)&p_context, RT_WAITING_FOREVER))
+		{
+			conn_params_update_delay(p_context);
+		}
+	}
+}
+
+/* part1 创建连接参数更新线程 */
+int conn_params_update_thread(void){
+	
+	/* 创建邮箱 */
+	conn_update_mb= rt_mb_create("conn_update_mb", 32/4, RT_IPC_FLAG_PRIO);
+	/* 创建线程 1 */
+    rt_thread_t conn_update = RT_NULL;
+    conn_update = rt_thread_create("conn_update",			/* 	线程名 		*/
+                            conn_update_thread_entry,		/* 	线程入口 	*/
+							RT_NULL,						/* 	传递形参 	*/
+                            1024,							/* 	线程栈大小 	*/
+                            9,								/* 	线程优先级 	*/
+							50);							/* 	时间片tick 	*/
+    if (conn_update != RT_NULL)
+	{
+		rt_thread_startup(conn_update);
+	}
+	
+	return 0;
+}
+INIT_APP_EXPORT(conn_params_update_thread);
+
+#endif //NRF_MODULE_ENABLED(NRF_BLE_CONN_PARAMS)
